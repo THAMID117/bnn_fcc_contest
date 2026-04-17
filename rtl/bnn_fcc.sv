@@ -9,7 +9,7 @@ module bnn_fcc #(
     parameter int TOPOLOGY[TOTAL_LAYERS] = '{0: 784, 1: 256, 2: 256, 3: 10, default: 0},
 
     parameter int PARALLEL_INPUTS = 8,
-    parameter int PARALLEL_NEURONS[TOTAL_LAYERS-1] = '{default: 8}
+    parameter int PARALLEL_NEURONS[TOTAL_LAYERS-1] = '{8, 8, 1}
 ) (
     input logic clk,
     input logic rst,

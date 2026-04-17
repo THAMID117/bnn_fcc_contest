@@ -22,7 +22,7 @@ module bnn_fcc_timing #(
 
     // TODO: UPDATE BASED ON IMPLEMENTATION-SPECIFIC PARAMETERS
     parameter int PARALLEL_INPUTS = 8,
-    parameter int PARALLEL_NEURONS[TOTAL_LAYERS-1] = '{8, 8, 10}    
+    parameter int PARALLEL_NEURONS[TOTAL_LAYERS-1] = '{8, 8, 1}
 ) (
     input logic clk,
     input logic rst,
