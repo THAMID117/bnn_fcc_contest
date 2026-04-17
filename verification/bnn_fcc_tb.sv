@@ -76,7 +76,7 @@
 // INPUT_DATA_WIDTH          - Bit-width of individual input elements (8-bit for MNIST)
 // OUTPUT_DATA_WIDTH         - Bit-width of individual output elements
 //
-// [DUT Configuration]       (TODO: Adapt to your own DUT if necessary. Feel free to create, ignore, and/or remove parameters)
+// [DUT Configuration]       (Adapt to your own DUT if necessary. Feel free to create, ignore, and/or remove parameters)
 // PARALLEL_INPUTS           - Number of inputs/weights processed in parallel in the first hidden layer.
 // PARALLEL_NEURONS          - Number of neurons processed in parallel in each non-input layer.
 
@@ -115,7 +115,7 @@ module bnn_fcc_tb #(
     // DUT configuration (can be modified or extended for your own DUT)        
     localparam int NON_INPUT_LAYERS = USE_CUSTOM_TOPOLOGY ? CUSTOM_LAYERS - 1 : TRAINED_LAYERS - 1,
     parameter int PARALLEL_INPUTS = 8,
-    parameter int PARALLEL_NEURONS[NON_INPUT_LAYERS] = '{8, 8, 10}
+    parameter int PARALLEL_NEURONS[NON_INPUT_LAYERS] = '{8, 8, 1}
 );
     import bnn_fcc_tb_pkg::*;
 

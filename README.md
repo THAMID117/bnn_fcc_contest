@@ -1,150 +1,201 @@
 # BNN_FCC Hardware Design Contest
 
-This repository provides a top-level interface and testing framework for a binary neural network (BNN). Specifically, the module implements a fully connected classifier (FCC).
+This repository contains a submission-ready implementation of the `bnn_fcc` binary neural network classifier for the Apple / EEL6935 design contest. The design targets the contest MNIST SFC topology `784 -> 256 -> 256 -> 10` and is verified with the provided AXI4-Stream-based infrastructure.
 
-In this contest, you will be implementing the provided top-level [bnn_fcc](rtl/bnn_fcc.sv) module, optimizing it for a specific use case, and ensuring it passes a variety of tests by 
-simulating it with a provided testbench. You will then evaluate the latency, throughput, clock frequency, and resource utilization for your design.
+The top-level DUT is [rtl/bnn_fcc.sv](rtl/bnn_fcc.sv). Interface details are documented in [rtl/README.md](rtl/README.md). Testbench details are documented in [verification/README.md](verification/README.md). Openflex timing and verification flows are documented in [openflex/README.md](openflex/README.md).
 
-The contest represents a collaboration between Apple, Greg Stitt, and EEL6935 Reconfigurable Computing 2 at University of Florida. Apple will be providing prizes for the top submissions.
+## Submission Candidate
 
-## Overview
+The canonical submission configuration used across the DUT, required verification testbench, coverage testbench, and timing wrapper is:
 
-This section provides an overview of the required functionality. See [rtl/README.md](rtl/README.md) for a detailed description of the bnn_fcc interface. See [verification/README.md](verification/README.md) for a detailed description of the testbench and how to simulate your design. For more background information on BNNs, see the [included slides](TBD).
+- `PARALLEL_INPUTS = 8`
+- `PARALLEL_NEURONS = '{8, 8, 1}`
 
-The bnn_fcc module takes an image input, consisting of 8-bit pixels, and classifies that image into one of multiple possible categories. The module is parameterized to support
-any BNN topology, but the contest will be judged based on the small, fully connected (SFC) topology from the following FINN paper:
+This is a deliberate high-frequency tradeoff. The hidden layers keep `8` lanes each to preserve simple packing and BRAM-friendly organization, while the output layer is serialized to reduce routed timing pressure.
 
-> Umuroglu, Y., Fraser, N. J., Gambardella, G., Blott, M., Leong, P., Jahre, M., & Vissers, K. (2017). FINN: A Framework for Fast, Scalable Binarized Neural Network Inference. In Proceedings of the 2017 ACM/SIGDA International Symposium on Field-Programmable Gate Arrays (pp. 65-74). DOI: 10.1145/3020078.3021744
+## Repository Layout
 
-The SFC topology is referred to as 784->256->256->10, which means 784 8-bit inputs, one hidden layer with 256 neurons, a second hidden layer with 256 neurons, and an output layer with 10 neurons. The repository provides a model (weights and thresholds) for the SFC topology, which was trained from the [MNIST](https://www.tensorflow.org/datasets/catalog/mnist) dataset for 0-9 digit recognition. Each of the 10 neurons in the output layer corresponds to a single category.
-
-The bnn_fcc module has three different interfaces: configuration, data input, and data output. All three interfaces use the [AXI4-Stream protocol](https://developer.arm.com/documentation/ihi0051/a/).
-
-The configuration interface receives a stream of data that contains the "model" of the network. For a BNN, this model specifies weights and thresholds for every neuron in every layer of the BNN. The exact format of the configuration stream is specified [here](TBD). Your design must initially parse this configuration stream and configure your own custom on-chip memory hierarchy to feed weights and thresholds to your neuron processing units. This "data movement" is surprisingly challenging and will likely be the most time consuming part of the project.
-
-The data input stream provides 8-bit pixels from an image. The bnn_fcc module then uses the provided model (weights and thresholds) to classify that image into a specific category.
-
-The data output stream provides the classified result for the provided input image. 
-
-Note that both the configuration stream and data input stream leverage the TKEEP functionality from the AXI4-Stream protocol. AXI4 streaming requires the bus width to be byte aligned (i.e., a multiple of 8 bits). For specific bus widths, some of those bytes might be unused. For example, assume we have a 64-bit bus (8 bytes), and receive an image with 9 8-bit pixels. The initial "beat" on the bus would contain 8 valid bytes. However, the second beat would contain only one valid byte. While the bnn_fcc module could potentially leverage knowledge of the image size to ignore the unused bytes, AXI streaming also provides the TKEEP signal to flag the validity of each byte. For this example, the second beat would assert TKEEP for the first byte, and clear it for the other 7 bytes.
-
-Similarly, all interfaces leverage TLAST, which specifies the last beat in a stream. For the configuration stream, TLAST specifies the end of a configuration message. For the image input, TLAST specifies the end of the image. For the output interface, TLAST should always be asserted since the size of an output "packet" is always one beat (unless you modify the parameters to support > 256 categories).
-
-Since a BNN can only process individual bits, the 8-bit pixels must initially be "binarized." To match the functionality of the testbench, this binarization should be done by comparing the 8-bit pixel value with 128. If the value is >= 128, the 8-bit pixel is replaced by a 1. Otherwise, it is replaced by a 0.
-
-Neurons in hidden layers always output a 0 or 1. However, the output layer is handled differently. Output layer neurons output their multi-bit "population count", which represents the strength of the classification for that neuron, where each neuron represents one classification category. The BNN then applies an "argmax" across those population counts, which simply assigns the BNN output with the index of the the neuron (i.e., the classified category) that had the largest population count.
-
-## Project Objective
-The finish the project, you must complete the following:
-* Simulate your design using the provided testbench with no failing tests.
-* Synthesize your design for a TBD FPGA, measure maximum clock frequency, and collect resource utilization results.
-* Measure cycle latency and throughput using the provided testbench.
-* Include a report that describes your targeted use case (e.g., minimize latency given a throughput constraint) and presents your results.
-
-## Judging Criteria
-Submissions will be judged based on:
-* Quality of optimization for the chosen use case.
-* Quality of overall verification (unit testing of individual modules, functional coverage, etc.)
-* Quality of code (readability, paramterization, )
-
-## Languages, Tools, FPGA
-* **HDL:** SystemVerilog (IEEE 1800-2012)
-* **Simulator:** Siemens Questa/ModelSim or IEEE 1800-2012 compliant simulator
-* **Synthesis:** Xilinx Vivado (any recent version)
-* **FPGA:** Xilinx Ultrascale+ TBD
-
-## Directory Structure
 ```text
 .
-├── rtl/                 # Hardware Source Files
-|   ├── bnn_fcc.sv       # Top-level DUT (complete this file)
-|   └── your own files
-├── verification/        # Testbench files
-|   ├── bnn_fcc_tb.sv
-|   ├── bnn_fcc_coverage_tb.sv
-|   ├── bnn_fcc_tb_pkg.sv
-|   └── your own files
-├── slides/              # Slides explaning the project
-|   └── TBD
-├── sim/                 # Recommended location for simulator project
-└── python/              # Python training scripts, reference model, training data, and test vectors
-    ├── training_data/   # Weights and Thresholds
-    └── test_vectors/
+├── rtl/                     # DUT source and interface documentation
+│   ├── bnn_fcc.sv
+│   └── README.md
+├── verification/            # Required and additional testbenches
+│   ├── axi4_stream_if.sv
+│   ├── bnn_fcc_tb_pkg.sv
+│   ├── bnn_fcc_tb.sv
+│   ├── bnn_fcc_coverage_tb.sv
+│   ├── coverage_plan.txt
+│   └── README.md
+├── openflex/                # Openflex YAML flows, timing wrapper, helper patch
+│   ├── bnn_fcc_verify.yml
+│   ├── bnn_fcc_coverage.yml
+│   ├── bnn_fcc_timing.yml
+│   ├── patch_openflex_parser.py
+│   ├── README.md
+│   └── rtl/bnn_fcc_timing.sv
+├── python/                  # Model data and reference test vectors
+├── doc/                     # Background slides and supporting material
+├── report.tex               # Canonical report source
+└── report.md                # Short pointer to the LaTeX report source
 ```
 
-# Git Instructions for How to Participate (Forking & Syncing Guide)
+## Tools and Target
 
-Use this guide to set up your design environment and keep your local files updated if the contest organizers release template updates.
+- HDL: SystemVerilog (IEEE 1800-2012)
+- Simulator: Siemens Questa/ModelSim or equivalent
+- Synthesis / PnR: Xilinx Vivado
+- FPGA target used for timing: `XCU250-FIGD2104-2L-E`
 
----
+## Quick Start
 
-## 1. Fork the Original Repository
+### 1. Create a simulator working directory
 
-You initially want your own copy of the contest repository that you can change. Git makes this posssible via a "fork."
+From the repository root:
 
-### Option A: Standard UI Fork
-Click the **Fork** button at the top-right of the contest repository. This creates a copy under your own account where you can safely upload your designs.
+```bash
+mkdir -p sim
+cd sim
+vlib work
+```
 
-### Option B: Manual Mirroring
-If you need to move the files to a different platform (e.g., from GitHub to a private GitLab):
-1. Create a new, empty repository on your account.
-2. Clone the original as a bare mirror:
-   `git clone --mirror https://github.com/CONTEST_HOLDER/template-repo.git`
-3. Push to your new repository:
-   `cd template-repo.git`
-   `git push --mirror https://github.com/YOUR_USERNAME/your-design-repo.git`
+### 2. Compile the RTL and testbenches
 
----
+```bash
+vlog -sv ../rtl/bnn_fcc.sv \
+         ../verification/axi4_stream_if.sv \
+         ../verification/bnn_fcc_tb_pkg.sv \
+         ../verification/bnn_fcc_tb.sv \
+         ../verification/bnn_fcc_coverage_tb.sv \
+         ../openflex/rtl/bnn_fcc_timing.sv
+```
 
-## 2. Local Setup
-Once you have your fork, clone it and link it back to the original source to receive updates.
+### 3. Run the required functional testbench
 
-1. **Clone your fork:**
-   `git clone https://github.com/YOUR_USERNAME/your-design-repo.git`
-2. **Add the contest source as 'upstream':**
-   `git remote add upstream https://github.com/CONTEST_HOLDER/template-repo.git`
+This is the direct Questa flow corresponding to the provided top-level testbench:
 
----
+```bash
+vsim -c work.bnn_fcc_tb -do "run -all; quit -f" | tee tb_out.txt
+grep -E "SUCCESS:|FAILED:|Avg latency|Avg throughput" tb_out.txt
+```
 
-## 3. Pulling Updates from Organizers
-If the contest organizers update the template or assets, run these commands to sync your work:
+### 4. Run the performance-oriented test
 
-1. `git fetch upstream`
-2. `git checkout main`
-3. `git merge upstream/main`
-4. `git push origin main`
+Use the measured `fMax` as the testbench clock period and disable external throttling:
 
----
+```bash
+vsim -c work.bnn_fcc_tb \
+  -gCLK_PERIOD=2.497ns \
+  -gTOGGLE_DATA_OUT_READY=0 \
+  -gCONFIG_VALID_PROBABILITY=1.0 \
+  -gDATA_IN_VALID_PROBABILITY=1.0 \
+  -do "run -all; quit -f" | tee perf_out.txt
 
-## 4. Resolving Conflicts
-If you edited a file that the organizers also updated, Git will ask you to choose which version to keep during the merging process.
+grep -E "SUCCESS:|Avg latency|Avg throughput" perf_out.txt
+```
 
-1. Open the conflicted file.
-2. You will see markers:
-   `<<<<<<< HEAD` (Your Design)
-   `=======`
-   `>>>>>>> upstream/main` (Organizer Update)
-3. Delete the markers and keep the parts of the code/design you want. For the contest, you must keep the changes from the organizers.
-4. Finalize the fix:
-   `git add <filename>`
-   `git commit -m "Merged updates from contest source"`
-5. Run `git status`. It should no longer say "You have unmerged paths."
-6. Your local merge isn't on GitHub until you push:
-   `git push origin main`
+### 5. Run the additional coverage-oriented testbench
 
----
+```bash
+vsim -c work.bnn_fcc_coverage_tb -do "run -all; quit -f" | tee coverage_tb_out.txt
+tail -n 40 coverage_tb_out.txt
+```
 
-## Quick Command Table
+### 6. Run the openflex verification and timing flows
 
-| Task | Command |
-| :--- | :--- |
-| **Link Original** | `git remote add upstream <url>` |
-| **Download Updates** | `git fetch upstream` |
-| **Apply Updates** | `git merge upstream/main` |
-| **Update Your Fork** | `git push origin main` |
+From the repository root:
 
-# Submission Instructions
+```bash
+cd openflex
+source ~/envs/openflex/bin/activate
+```
 
-For your submission, you must include a report.pdf that includes the timing results, area results, and verification results. Collecting these results can be done by following the instructions in the [openflex/](openflex/) folder.
+If openflex crashes after a successful Vivado run with a parser error on fractional utilization such as `12.5`, patch the installed parser:
 
-Additional instructions for submitting the repository with your design will be explained in EEL6935 Reconfigurable Computing 2.
+```bash
+python patch_openflex_parser.py --check
+python patch_openflex_parser.py
+```
+
+Then run:
+
+```bash
+openflex bnn_fcc_verify.yml | tee verify_out.txt
+openflex bnn_fcc_coverage.yml | tee coverage_out.txt
+openflex bnn_fcc_timing.yml -c bnn_fcc.csv | tee timing_out.txt
+```
+
+Useful summaries:
+
+```bash
+grep -E "SUCCESS:|FAILED:|FAILURE:" verify_out.txt
+grep -E "SUCCESS:|Avg latency|Avg throughput" ../sim/perf_out.txt
+grep -E "WNS|Post Physical Optimization Timing Summary|8-7052|8-7030|8-6904" timing_out.txt
+cat bnn_fcc.csv
+```
+
+## Current Reported Results
+
+The latest timing and resource result captured for the canonical submission candidate is:
+
+- `fMax = 400.48057669203047 MHz`
+- `LUT = 3066`
+- `FF = 1818`
+- `BRAM = 12.5`
+- `DSP = 0`
+
+The additional coverage-oriented testbench reported:
+
+- `config_msg_cov = 95.8%`
+- `keep_cov = 85.4%`
+- `valid_mode_cov = 100.0%`
+- `ready_mode_cov = 100.0%`
+- `reset_cov = 100.0%`
+- `output_cov = 100.0%`
+- `output_seq_cov = 100.0%`
+- `threshold_cov = 94.4%`
+- `weight_cov = 88.9%`
+- `average covergroup = 96.1%`
+
+The LaTeX report source in [report.tex](report.tex) contains the full writeup, exact reproduction commands, and result tables.
+
+Important: the required top-level testbench defaults were synchronized to the canonical submission candidate during final repo cleanup. Rerun the required functional testbench, the performance-oriented run, and `openflex bnn_fcc_verify.yml` before freezing the final `report.pdf`.
+
+## Report Build
+
+Build the submission PDF from the repository root with:
+
+```bash
+latexmk -pdf report.tex
+```
+
+If `latexmk` is not installed, use:
+
+```bash
+pdflatex report.tex
+pdflatex report.tex
+```
+
+This produces `report.pdf`, which is the file intended for submission.
+
+## Submission Checklist
+
+Before submitting the repository:
+
+1. Rerun the required functional testbench and confirm the success banner.
+2. Rerun the coverage-oriented testbench and confirm the printed coverage summary.
+3. Rerun `openflex bnn_fcc_verify.yml` and confirm a clean pass.
+4. Rerun `openflex bnn_fcc_timing.yml -c bnn_fcc.csv` and confirm the reported timing and area figures.
+5. Build `report.pdf` from [report.tex](report.tex).
+6. Verify that the repository root contains the final report and that the commands in the report still match the repo contents.
+
+## Upstream Syncing
+
+If the organizers update the template repository and you need to merge those changes:
+
+```bash
+git fetch upstream
+git checkout main
+git merge upstream/main
+git push origin main
+```

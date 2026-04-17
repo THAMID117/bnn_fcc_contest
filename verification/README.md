@@ -30,21 +30,51 @@ This folder contains a parameterized SystemVerilog testbench for verifying the f
 
 #### Script Mode
 
-TO BE UPDATED
+From the repository root:
 
-<!--1. Open your simulator and navigate to the `sim/` directory.
-2. Compile the package, DUT, and testbench:
-```tcl
-vlog -sv ../rtl/bnn_fcc.sv
-vlog -sv ../verification/bnn_fcc_tb_pkg.sv
-vlog -sv ../verification/bnn_fcc_tb.sv
+```bash
+mkdir -p sim
+cd sim
+vlib work
+
+vlog -sv ../rtl/bnn_fcc.sv \
+         ../verification/axi4_stream_if.sv \
+         ../verification/bnn_fcc_tb_pkg.sv \
+         ../verification/bnn_fcc_tb.sv \
+         ../verification/bnn_fcc_coverage_tb.sv
 ```
-3. Initialize and run the simulation:
-```tcl
-vsim -gBASE_DIR="../python" -gNUM_TEST_IMAGES=100 -gDATA_IN_VALID_PROBABILITY=0.8 work.bnn_fcc_tb
-run -all
+
+Run the required functional testbench:
+
+```bash
+vsim -c work.bnn_fcc_tb -do "run -all; quit -f" | tee tb_out.txt
+grep -E "SUCCESS:|FAILED:|Avg latency|Avg throughput" tb_out.txt
 ```
--->
+
+Run the coverage-oriented testbench:
+
+```bash
+vsim -c work.bnn_fcc_coverage_tb -do "run -all; quit -f" | tee coverage_tb_out.txt
+tail -n 40 coverage_tb_out.txt
+```
+
+Run the performance-oriented flow:
+
+```bash
+vsim -c work.bnn_fcc_tb \
+  -gCLK_PERIOD=2.497ns \
+  -gTOGGLE_DATA_OUT_READY=0 \
+  -gCONFIG_VALID_PROBABILITY=1.0 \
+  -gDATA_IN_VALID_PROBABILITY=1.0 \
+  -do "run -all; quit -f" | tee perf_out.txt
+
+grep -E "SUCCESS:|Avg latency|Avg throughput" perf_out.txt
+```
+
+The repository default submission candidate uses:
+
+* `PARALLEL_INPUTS = 8`
+* `PARALLEL_NEURONS = '{8, 8, 1}`
 ---
 
 ## Additional Coverage Testbench

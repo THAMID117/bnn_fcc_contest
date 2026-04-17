@@ -8,7 +8,7 @@ We are using the openflex tool to collect timing and area results, in addition t
 
 ```bash
 python -m venv ~/envs/openflex
-source ~envs/openflex/bin/activate
+source ~/envs/openflex/bin/activate
 pip install -U pip        
 pip install openflex     
 ```
@@ -16,7 +16,7 @@ pip install openflex
 When logging back into your account after installing, you can reactivate the openflex environment with:
 
 ```bash
-source ~envs/openflex/bin/activate
+source ~/envs/openflex/bin/activate
 ```
 
 To deactivate at any time:
@@ -27,12 +27,11 @@ deactivate
 
 ## Collecting Timing and Area Results
 
-Openflex uses a YAML file to specify the details of the project. I have provided the [bnn_fcc_timing.yml YAML file](bnn_fcc_timing.yml) for collecting timing and area results.
-However, to use it you must first modify the file to specify all of your source files.
+Openflex uses a YAML file to specify the details of the project. This repository already includes a working [bnn_fcc_timing.yml](bnn_fcc_timing.yml) with the required source files for this submission candidate.
 
 For out-of-context timing analysis, it is usually a good idea to ensure that the I/O is registered. I provide this for you in [rtl/bnn_fcc_timing.sv](rtl/bnn_fcc_timing.sv), which will be the top-level module for synthesis when collecting results.
 
-IMPORTANT: modify the implementation-specific default parameter values in [rtl/bnn_fcc_timing.sv](rtl/bnn_fcc_timing.sv). All other parameter values are specified by the the YAML file.
+IMPORTANT: keep the implementation-specific default parameter values in [rtl/bnn_fcc_timing.sv](rtl/bnn_fcc_timing.sv) aligned with the canonical submission candidate. For this repository, that means `PARALLEL_INPUTS = 8` and `PARALLEL_NEURONS = '{8, 8, 1}`.
 
 Run openflex to collecting timing results with the following:
 
@@ -55,7 +54,7 @@ from this `openflex/` directory, then rerun the timing command.
 
 ## Verification
 
-For verifying your final design, update the [bnn_fcc_verify.yml](bnn_fcc_verify.yml) file with your design sources like before. You do not need `bnn_fcc_timing.sv` here.
+For verifying your final design, this repository already includes the required source list in [bnn_fcc_verify.yml](bnn_fcc_verify.yml). You do not need `bnn_fcc_timing.sv` here.
 
 You could potentially verify your design like this:
 

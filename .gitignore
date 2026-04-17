@@ -1,0 +1,17 @@
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+
+sim/work/
+sim/transcript
+sim/vsim.wlf
+
+openflex/qrun.out/
+openflex/outputs/
+openflex/.Xil/
+openflex/vivado*.jou
+openflex/vivado*.log
