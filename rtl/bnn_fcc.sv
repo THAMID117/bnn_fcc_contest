@@ -161,8 +161,8 @@ module bnn_fcc #(
         end
     end
 
-    assign config_ready  = (state == STATE_CONFIG) && !cfg_beat_pending;
-    assign data_in_ready = (state == STATE_WAIT_IMAGE) && !in_beat_pending;
+    assign config_ready  = (state == STATE_CONFIG) && !cfg_beat_pending && !all_layers_loaded;
+    assign data_in_ready = (state == STATE_WAIT_IMAGE) && !in_beat_pending && !image_complete;
 
     assign data_out_valid = (state == STATE_OUTPUT);
     assign data_out_data  = out_data_reg;
