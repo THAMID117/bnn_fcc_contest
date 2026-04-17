@@ -85,8 +85,10 @@ module bnn_fcc #(
     localparam int MAX_GROUPS = max3(L0_GROUPS, L1_GROUPS, L2_GROUPS);
     localparam int MAX_PN     = max3(PN0, PN1, PN2);
 
+    localparam int MAX_NEURONS       = max3(L1_INPUTS, L2_INPUTS, L3_OUTPUTS);
     localparam int ACC_WIDTH         = (MAX_INPUTS > 0) ? $clog2(MAX_INPUTS + 1) : 1;
     localparam int PIXEL_COUNT_WIDTH = (L0_INPUTS > 0) ? $clog2(L0_INPUTS + 1) : 1;
+    localparam int NEURON_COUNT_WIDTH = (MAX_NEURONS > 0) ? $clog2(MAX_NEURONS + 1) : 1;
     localparam int WORD_COUNT_WIDTH  = (MAX_WORDS > 1) ? $clog2(MAX_WORDS) : 1;
     localparam int GROUP_COUNT_WIDTH = (MAX_GROUPS > 1) ? $clog2(MAX_GROUPS) : 1;
     localparam int BYTE_IDX_WIDTH    = (CONFIG_BYTES_PER_BEAT > 1) ? $clog2(CONFIG_BYTES_PER_BEAT) : 1;
@@ -146,7 +148,7 @@ module bnn_fcc #(
     logic [7:0] cfg_layer_id;
     logic [15:0] cfg_bytes_per_neuron;
     logic [31:0] cfg_payload_bytes_left;
-    logic [GROUP_COUNT_WIDTH:0] cfg_neuron_idx;
+    logic [NEURON_COUNT_WIDTH-1:0] cfg_neuron_idx;
     logic [MSG_BYTES_WIDTH-1:0] cfg_byte_in_neuron;
     logic [1:0] cfg_threshold_byte_idx;
     logic [31:0] cfg_threshold_shift;
