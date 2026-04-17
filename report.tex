@@ -7,6 +7,7 @@
 \usepackage{tabularx}
 \usepackage{array}
 \usepackage{longtable}
+\usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{enumitem}
@@ -366,6 +367,17 @@ Average cycles / output & 89704.3 \\
 
 \paragraph{Important cleanup note.}
 Because the required testbench defaults were synchronized during final repository cleanup, this performance table should be refreshed after rerunning the command in Section~\ref{sec:perf-cmd} if you want every reported number in the PDF to correspond exactly to the final repository state.
+
+\subsection{Representative console snapshot}
+
+Figure~\ref{fig:console-snapshot} shows a representative terminal capture from the final verification workflow. The image includes the passing coverage summary and the performance-oriented testbench statistics that were used when preparing this submission package.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.94\textwidth,height=0.78\textheight,keepaspectratio]{images/final_console_snapshot.png}
+\caption{Representative terminal snapshot showing the final coverage summary and performance-oriented simulation results.}
+\label{fig:console-snapshot}
+\end{figure}
 
 \section{Why This Is a Reasonable Contest Candidate}
 
