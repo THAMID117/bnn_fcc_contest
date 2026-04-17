@@ -45,6 +45,14 @@ You can see an example in [example.csv](example.csv).
 
 If you get errors when running openflex here, make sure that Vivado is in your PATH, that the YAML file contains all required source files, and that openflex is activated.
 
+If a timing run completes Vivado but then crashes with `ValueError: invalid literal for int() with base 10: '12.5'`, the installed `openflex` parser is choking on fractional utilization values reported by Vivado. From the activated environment, run:
+
+```bash
+python patch_openflex_parser.py
+```
+
+from this `openflex/` directory, then rerun the timing command.
+
 ## Verification
 
 For verifying your final design, update the [bnn_fcc_verify.yml](bnn_fcc_verify.yml) file with your design sources like before. You do not need `bnn_fcc_timing.sv` here.
