@@ -45,6 +45,15 @@ module bnn_fcc #(
         max3 = max2(max2(a, b), c);
     endfunction
 
+    function automatic int popcount_word(input logic [PARALLEL_INPUTS-1:0] value);
+        int count;
+        count = 0;
+        for (int i = 0; i < PARALLEL_INPUTS; i++) begin
+            count += value[i];
+        end
+        popcount_word = count;
+    endfunction
+
     localparam int NON_INPUT_LAYERS = TOTAL_LAYERS - 1;
     localparam int CONFIG_BYTES_PER_BEAT = CONFIG_BUS_WIDTH / 8;
     localparam int INPUT_BYTES_PER_BEAT  = INPUT_BUS_WIDTH / 8;
