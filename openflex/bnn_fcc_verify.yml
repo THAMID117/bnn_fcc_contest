@@ -26,7 +26,6 @@ parameters:
   CONFIG_BUS_WIDTH: [64]
   OUTPUT_DATA_WIDTH: [4]
   OUTPUT_BUS_WIDTH: [8]
-  TOTAL_LAYERS: [4]
   BASE_DIR: ["../../python"]
 
 # TODO: Make sure implementation-specific parameters have appropriate defaults in bnn_fcc_tb.sv

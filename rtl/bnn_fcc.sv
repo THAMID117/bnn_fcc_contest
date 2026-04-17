@@ -469,7 +469,7 @@ module bnn_fcc #(
                             state               <= STATE_COMPUTE_ACCUM;
                         end
                     end else begin
-                        for (int slot = 0; slot < MAX_PARALLEL_NEURONS; slot++) begin
+                        for (int slot = 0; slot < PARALLEL_INPUTS; slot++) begin
                             if ((slot < active_neurons) && ((compute_neuron_base + slot) < layer_neurons)) begin
                                 activation_word[slot] = (accum[slot] >= threshold_mem[compute_layer][compute_neuron_base + slot]);
                             end
