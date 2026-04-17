@@ -85,12 +85,15 @@ module bnn_fcc #(
     localparam int MAX_GROUPS = max3(L0_GROUPS, L1_GROUPS, L2_GROUPS);
     localparam int MAX_PN     = max3(PN0, PN1, PN2);
 
-    localparam int MAX_NEURONS       = max3(L1_INPUTS, L2_INPUTS, L3_OUTPUTS);
-    localparam int ACC_WIDTH         = (MAX_INPUTS > 0) ? $clog2(MAX_INPUTS + 1) : 1;
-    localparam int PIXEL_COUNT_WIDTH = (L0_INPUTS > 0) ? $clog2(L0_INPUTS + 1) : 1;
+    localparam int MAX_NEURONS        = max3(L1_INPUTS, L2_INPUTS, L3_OUTPUTS);
+    localparam int ACC_WIDTH          = (MAX_INPUTS > 0) ? $clog2(MAX_INPUTS + 1) : 1;
+    localparam int PIXEL_COUNT_WIDTH  = (L0_INPUTS > 0) ? $clog2(L0_INPUTS + 1) : 1;
     localparam int NEURON_COUNT_WIDTH = (MAX_NEURONS > 0) ? $clog2(MAX_NEURONS + 1) : 1;
-    localparam int WORD_COUNT_WIDTH  = (MAX_WORDS > 1) ? $clog2(MAX_WORDS) : 1;
-    localparam int GROUP_COUNT_WIDTH = (MAX_GROUPS > 1) ? $clog2(MAX_GROUPS) : 1;
+    localparam int WORD_COUNT_WIDTH   = (MAX_WORDS > 1) ? $clog2(MAX_WORDS) : 1;
+    localparam int GROUP_COUNT_WIDTH  = (MAX_GROUPS > 1) ? $clog2(MAX_GROUPS) : 1;
+    localparam int L0_ADDR_WIDTH      = (L0_SLOT_DEPTH > 1) ? $clog2(L0_SLOT_DEPTH) : 1;
+    localparam int L1_ADDR_WIDTH      = (L1_SLOT_DEPTH > 1) ? $clog2(L1_SLOT_DEPTH) : 1;
+    localparam int L2_ADDR_WIDTH      = (L2_SLOT_DEPTH > 1) ? $clog2(L2_SLOT_DEPTH) : 1;
     localparam int BYTE_IDX_WIDTH    = (CONFIG_BYTES_PER_BEAT > 1) ? $clog2(CONFIG_BYTES_PER_BEAT) : 1;
     localparam int IN_BYTE_IDX_WIDTH = (INPUT_BYTES_PER_BEAT > 1) ? $clog2(INPUT_BYTES_PER_BEAT) : 1;
     localparam int MSG_BYTES_WIDTH   = (max3(L0_WORDS, L1_WORDS, L2_WORDS) * 8 > 1) ? $clog2(max3(L0_WORDS, L1_WORDS, L2_WORDS) * 8 + 1) : 1;
@@ -109,20 +112,32 @@ module bnn_fcc #(
 
     state_t state;
 
-    (* ram_style = "block" *) logic [PARALLEL_INPUTS-1:0] weight_mem_l0[0:PN0-1][0:L0_SLOT_DEPTH-1];
-    (* ram_style = "block" *) logic [PARALLEL_INPUTS-1:0] weight_mem_l1[0:PN1-1][0:L1_SLOT_DEPTH-1];
-    (* ram_style = "block" *) logic [PARALLEL_INPUTS-1:0] weight_mem_l2[0:PN2-1][0:L2_SLOT_DEPTH-1];
+    logic [PN0-1:0]                      l0_weight_wr_en;
+    logic [PN1-1:0]                      l1_weight_wr_en;
+    logic [PN2-1:0]                      l2_weight_wr_en;
+    logic [PN0-1:0]                      l0_weight_rd_en;
+    logic [PN1-1:0]                      l1_weight_rd_en;
+    logic [PN2-1:0]                      l2_weight_rd_en;
+    logic [PN0-1:0][L0_ADDR_WIDTH-1:0]   l0_weight_wr_addr;
+    logic [PN1-1:0][L1_ADDR_WIDTH-1:0]   l1_weight_wr_addr;
+    logic [PN2-1:0][L2_ADDR_WIDTH-1:0]   l2_weight_wr_addr;
+    logic [PN0-1:0][L0_ADDR_WIDTH-1:0]   l0_weight_rd_addr;
+    logic [PN1-1:0][L1_ADDR_WIDTH-1:0]   l1_weight_rd_addr;
+    logic [PN2-1:0][L2_ADDR_WIDTH-1:0]   l2_weight_rd_addr;
+    logic [PN0-1:0][PARALLEL_INPUTS-1:0] l0_weight_wr_data;
+    logic [PN1-1:0][PARALLEL_INPUTS-1:0] l1_weight_wr_data;
+    logic [PN2-1:0][PARALLEL_INPUTS-1:0] l2_weight_wr_data;
 
-    logic [31:0] threshold_mem_l0[0:PN0-1][0:L0_GROUPS-1];
-    logic [31:0] threshold_mem_l1[0:PN1-1][0:L1_GROUPS-1];
+    logic [ACC_WIDTH-1:0] threshold_mem_l0[0:L1_INPUTS-1];
+    logic [ACC_WIDTH-1:0] threshold_mem_l1[0:L2_INPUTS-1];
 
     logic [PARALLEL_INPUTS-1:0] input_buf_l0[0:L0_WORDS-1];
     logic [PARALLEL_INPUTS-1:0] input_buf_l1[0:L1_WORDS-1];
     logic [PARALLEL_INPUTS-1:0] input_buf_l2[0:L2_WORDS-1];
 
-    logic [PARALLEL_INPUTS-1:0] weight_rd_data_l0[0:PN0-1];
-    logic [PARALLEL_INPUTS-1:0] weight_rd_data_l1[0:PN1-1];
-    logic [PARALLEL_INPUTS-1:0] weight_rd_data_l2[0:PN2-1];
+    logic [PN0-1:0][PARALLEL_INPUTS-1:0] weight_rd_data_l0;
+    logic [PN1-1:0][PARALLEL_INPUTS-1:0] weight_rd_data_l1;
+    logic [PN2-1:0][PARALLEL_INPUTS-1:0] weight_rd_data_l2;
 
     logic [ACC_WIDTH-1:0] accum[0:MAX_PN-1];
     logic [ACC_WIDTH-1:0] best_score;
@@ -165,6 +180,7 @@ module bnn_fcc #(
     logic [WORD_COUNT_WIDTH-1:0]  compute_word_idx;
 
     logic [OUTPUT_BUS_WIDTH-1:0] out_data_reg;
+    logic [7:0] cfg_byte_cur;
 
     function automatic int input_words_for_layer(input logic [1:0] layer_id);
         case (layer_id)
@@ -197,6 +213,146 @@ module bnn_fcc #(
             default: parallel_neurons_for_layer = PN2;
         endcase
     endfunction
+
+    assign cfg_byte_cur = cfg_beat_data[cfg_beat_byte_idx*8+:8];
+
+    generate
+        for (genvar slot = 0; slot < PN0; slot++) begin : gen_l0_weight_bank
+            bnn_weight_bank #(
+                .WIDTH(PARALLEL_INPUTS),
+                .DEPTH(L0_SLOT_DEPTH)
+            ) bank (
+                .clk    (clk),
+                .wr_en  (l0_weight_wr_en[slot]),
+                .wr_addr(l0_weight_wr_addr[slot]),
+                .wr_data(l0_weight_wr_data[slot]),
+                .rd_en  (l0_weight_rd_en[slot]),
+                .rd_addr(l0_weight_rd_addr[slot]),
+                .rd_data(weight_rd_data_l0[slot])
+            );
+        end
+
+        for (genvar slot = 0; slot < PN1; slot++) begin : gen_l1_weight_bank
+            bnn_weight_bank #(
+                .WIDTH(PARALLEL_INPUTS),
+                .DEPTH(L1_SLOT_DEPTH)
+            ) bank (
+                .clk    (clk),
+                .wr_en  (l1_weight_wr_en[slot]),
+                .wr_addr(l1_weight_wr_addr[slot]),
+                .wr_data(l1_weight_wr_data[slot]),
+                .rd_en  (l1_weight_rd_en[slot]),
+                .rd_addr(l1_weight_rd_addr[slot]),
+                .rd_data(weight_rd_data_l1[slot])
+            );
+        end
+
+        for (genvar slot = 0; slot < PN2; slot++) begin : gen_l2_weight_bank
+            bnn_weight_bank #(
+                .WIDTH(PARALLEL_INPUTS),
+                .DEPTH(L2_SLOT_DEPTH)
+            ) bank (
+                .clk    (clk),
+                .wr_en  (l2_weight_wr_en[slot]),
+                .wr_addr(l2_weight_wr_addr[slot]),
+                .wr_data(l2_weight_wr_data[slot]),
+                .rd_en  (l2_weight_rd_en[slot]),
+                .rd_addr(l2_weight_rd_addr[slot]),
+                .rd_data(weight_rd_data_l2[slot])
+            );
+        end
+    endgenerate
+
+    // Present one independent RAM bank per neuron lane so Vivado can infer real memories.
+    always_comb begin
+        l0_weight_wr_en   = '0;
+        l1_weight_wr_en   = '0;
+        l2_weight_wr_en   = '0;
+        l0_weight_rd_en   = '0;
+        l1_weight_rd_en   = '0;
+        l2_weight_rd_en   = '0;
+        l0_weight_wr_addr = '0;
+        l1_weight_wr_addr = '0;
+        l2_weight_wr_addr = '0;
+        l0_weight_rd_addr = '0;
+        l1_weight_rd_addr = '0;
+        l2_weight_rd_addr = '0;
+        l0_weight_wr_data = '0;
+        l1_weight_wr_data = '0;
+        l2_weight_wr_data = '0;
+
+        if (state == STATE_CONFIG &&
+            cfg_beat_pending &&
+            cfg_beat_keep[cfg_beat_byte_idx] &&
+            cfg_in_payload &&
+            cfg_msg_type == 8'd0) begin
+            int cfg_slot;
+            int cfg_group;
+            int cfg_addr;
+
+            case (cfg_layer_id)
+                8'd0: begin
+                    cfg_slot = cfg_neuron_idx % PN0;
+                    cfg_group = cfg_neuron_idx / PN0;
+                    cfg_addr = cfg_group * L0_WORDS + cfg_byte_in_neuron;
+                    l0_weight_wr_en[cfg_slot] = 1'b1;
+                    l0_weight_wr_addr[cfg_slot] = L0_ADDR_WIDTH'(cfg_addr);
+                    l0_weight_wr_data[cfg_slot] = cfg_byte_cur;
+                end
+                8'd1: begin
+                    cfg_slot = cfg_neuron_idx % PN1;
+                    cfg_group = cfg_neuron_idx / PN1;
+                    cfg_addr = cfg_group * L1_WORDS + cfg_byte_in_neuron;
+                    l1_weight_wr_en[cfg_slot] = 1'b1;
+                    l1_weight_wr_addr[cfg_slot] = L1_ADDR_WIDTH'(cfg_addr);
+                    l1_weight_wr_data[cfg_slot] = cfg_byte_cur;
+                end
+                default: begin
+                    cfg_slot = cfg_neuron_idx % PN2;
+                    cfg_group = cfg_neuron_idx / PN2;
+                    cfg_addr = cfg_group * L2_WORDS + cfg_byte_in_neuron;
+                    l2_weight_wr_en[cfg_slot] = 1'b1;
+                    l2_weight_wr_addr[cfg_slot] = L2_ADDR_WIDTH'(cfg_addr);
+                    l2_weight_wr_data[cfg_slot] = cfg_byte_cur;
+                end
+            endcase
+        end
+
+        if (state == STATE_COMPUTE_READ) begin
+            int active_neurons;
+            int layer_neurons;
+
+            active_neurons = parallel_neurons_for_layer(compute_layer);
+            layer_neurons  = neurons_for_layer(compute_layer);
+
+            case (compute_layer)
+                2'd0: begin
+                    for (int slot = 0; slot < PN0; slot++) begin
+                        if ((slot < active_neurons) && ((compute_group_idx * PN0 + slot) < layer_neurons)) begin
+                            l0_weight_rd_en[slot] = 1'b1;
+                            l0_weight_rd_addr[slot] = L0_ADDR_WIDTH'(compute_group_idx * L0_WORDS + compute_word_idx);
+                        end
+                    end
+                end
+                2'd1: begin
+                    for (int slot = 0; slot < PN1; slot++) begin
+                        if ((slot < active_neurons) && ((compute_group_idx * PN1 + slot) < layer_neurons)) begin
+                            l1_weight_rd_en[slot] = 1'b1;
+                            l1_weight_rd_addr[slot] = L1_ADDR_WIDTH'(compute_group_idx * L1_WORDS + compute_word_idx);
+                        end
+                    end
+                end
+                default: begin
+                    for (int slot = 0; slot < PN2; slot++) begin
+                        if ((slot < active_neurons) && ((compute_group_idx * PN2 + slot) < layer_neurons)) begin
+                            l2_weight_rd_en[slot] = 1'b1;
+                            l2_weight_rd_addr[slot] = L2_ADDR_WIDTH'(compute_group_idx * L2_WORDS + compute_word_idx);
+                        end
+                    end
+                end
+            endcase
+        end
+    end
 
     always_comb begin
         all_layers_loaded = weights_loaded_l0 & weights_loaded_l1 & weights_loaded_l2 &
@@ -273,23 +429,6 @@ module bnn_fcc #(
                 accum[i] <= '0;
             end
 
-            for (int s = 0; s < PN0; s++) begin
-                weight_rd_data_l0[s] <= '0;
-                for (int g = 0; g < L0_GROUPS; g++) threshold_mem_l0[s][g] <= '0;
-                for (int a = 0; a < L0_SLOT_DEPTH; a++) weight_mem_l0[s][a] <= {PARALLEL_INPUTS{1'b1}};
-            end
-
-            for (int s = 0; s < PN1; s++) begin
-                weight_rd_data_l1[s] <= '0;
-                for (int g = 0; g < L1_GROUPS; g++) threshold_mem_l1[s][g] <= '0;
-                for (int a = 0; a < L1_SLOT_DEPTH; a++) weight_mem_l1[s][a] <= {PARALLEL_INPUTS{1'b1}};
-            end
-
-            for (int s = 0; s < PN2; s++) begin
-                weight_rd_data_l2[s] <= '0;
-                for (int a = 0; a < L2_SLOT_DEPTH; a++) weight_mem_l2[s][a] <= {PARALLEL_INPUTS{1'b1}};
-            end
-
             for (int w = 0; w < L0_WORDS; w++) input_buf_l0[w] <= '0;
             for (int w = 0; w < L1_WORDS; w++) input_buf_l1[w] <= '0;
             for (int w = 0; w < L2_WORDS; w++) input_buf_l2[w] <= '0;
@@ -297,16 +436,12 @@ module bnn_fcc #(
             case (state)
                 STATE_CONFIG: begin
                     if (cfg_beat_pending) begin
-                        logic [7:0] cfg_byte;
-
-                        cfg_byte = cfg_beat_data[cfg_beat_byte_idx*8+:8];
-
                         if (cfg_beat_keep[cfg_beat_byte_idx]) begin
                             if (!cfg_in_payload) begin
                                 logic [127:0] next_header;
 
                                 next_header = cfg_header;
-                                next_header[cfg_header_byte_idx*8+:8] = cfg_byte;
+                                next_header[cfg_header_byte_idx*8+:8] = cfg_byte_cur;
                                 cfg_header  <= next_header;
 
                                 if (cfg_header_byte_idx == 4'd15) begin
@@ -325,50 +460,20 @@ module bnn_fcc #(
                                 end
                             end else begin
                                 if (cfg_msg_type == 8'd0) begin
-                                    int cfg_slot;
-                                    int cfg_group;
-                                    int cfg_addr;
-
-                                    case (cfg_layer_id)
-                                        8'd0: begin
-                                            cfg_slot = cfg_neuron_idx % PN0;
-                                            cfg_group = cfg_neuron_idx / PN0;
-                                            cfg_addr = cfg_group * L0_WORDS + cfg_byte_in_neuron;
-                                            weight_mem_l0[cfg_slot][cfg_addr] <= cfg_byte;
-                                        end
-                                        8'd1: begin
-                                            cfg_slot = cfg_neuron_idx % PN1;
-                                            cfg_group = cfg_neuron_idx / PN1;
-                                            cfg_addr = cfg_group * L1_WORDS + cfg_byte_in_neuron;
-                                            weight_mem_l1[cfg_slot][cfg_addr] <= cfg_byte;
-                                        end
-                                        default: begin
-                                            cfg_slot = cfg_neuron_idx % PN2;
-                                            cfg_group = cfg_neuron_idx / PN2;
-                                            cfg_addr = cfg_group * L2_WORDS + cfg_byte_in_neuron;
-                                            weight_mem_l2[cfg_slot][cfg_addr] <= cfg_byte;
-                                        end
-                                    endcase
                                 end else begin
                                     logic [31:0] next_threshold;
-                                    int cfg_slot;
-                                    int cfg_group;
 
                                     next_threshold = cfg_threshold_shift;
-                                    next_threshold[cfg_threshold_byte_idx*8+:8] = cfg_byte;
+                                    next_threshold[cfg_threshold_byte_idx*8+:8] = cfg_byte_cur;
                                     cfg_threshold_shift <= next_threshold;
 
                                     if (cfg_threshold_byte_idx == 2'd3) begin
                                         case (cfg_layer_id)
                                             8'd0: begin
-                                                cfg_slot  = cfg_neuron_idx % PN0;
-                                                cfg_group = cfg_neuron_idx / PN0;
-                                                threshold_mem_l0[cfg_slot][cfg_group] <= next_threshold;
+                                                threshold_mem_l0[cfg_neuron_idx] <= ACC_WIDTH'(next_threshold);
                                             end
                                             default: begin
-                                                cfg_slot  = cfg_neuron_idx % PN1;
-                                                cfg_group = cfg_neuron_idx / PN1;
-                                                threshold_mem_l1[cfg_slot][cfg_group] <= next_threshold;
+                                                threshold_mem_l1[cfg_neuron_idx] <= ACC_WIDTH'(next_threshold);
                                             end
                                         endcase
                                         cfg_threshold_byte_idx <= '0;
@@ -491,30 +596,6 @@ module bnn_fcc #(
                         default: compute_input_word <= input_buf_l2[compute_word_idx];
                     endcase
 
-                    case (compute_layer)
-                        2'd0: begin
-                            for (int slot = 0; slot < PN0; slot++) begin
-                                if ((slot < active_neurons) && ((compute_group_idx * PN0 + slot) < layer_neurons)) begin
-                                    weight_rd_data_l0[slot] <= weight_mem_l0[slot][compute_group_idx * L0_WORDS + compute_word_idx];
-                                end
-                            end
-                        end
-                        2'd1: begin
-                            for (int slot = 0; slot < PN1; slot++) begin
-                                if ((slot < active_neurons) && ((compute_group_idx * PN1 + slot) < layer_neurons)) begin
-                                    weight_rd_data_l1[slot] <= weight_mem_l1[slot][compute_group_idx * L1_WORDS + compute_word_idx];
-                                end
-                            end
-                        end
-                        default: begin
-                            for (int slot = 0; slot < PN2; slot++) begin
-                                if ((slot < active_neurons) && ((compute_group_idx * PN2 + slot) < layer_neurons)) begin
-                                    weight_rd_data_l2[slot] <= weight_mem_l2[slot][compute_group_idx * L2_WORDS + compute_word_idx];
-                                end
-                            end
-                        end
-                    endcase
-
                     state <= STATE_COMPUTE_ACCUM;
                 end
 
@@ -615,7 +696,7 @@ module bnn_fcc #(
 
                                 neuron_idx = compute_group_idx * PN0 + slot;
                                 if ((slot < active_neurons) && (neuron_idx < layer_neurons)) begin
-                                    activation_word[slot] = (accum[slot] >= threshold_mem_l0[slot][compute_group_idx]);
+                                    activation_word[slot] = (accum[slot] >= threshold_mem_l0[neuron_idx]);
                                 end
                             end
                             input_buf_l1[compute_group_idx] <= activation_word;
@@ -625,7 +706,7 @@ module bnn_fcc #(
 
                                 neuron_idx = compute_group_idx * PN1 + slot;
                                 if ((slot < active_neurons) && (neuron_idx < layer_neurons)) begin
-                                    activation_word[slot] = (accum[slot] >= threshold_mem_l1[slot][compute_group_idx]);
+                                    activation_word[slot] = (accum[slot] >= threshold_mem_l1[neuron_idx]);
                                 end
                             end
                             input_buf_l2[compute_group_idx] <= activation_word;
@@ -659,4 +740,24 @@ module bnn_fcc #(
         end
     end
 
+endmodule
+
+module bnn_weight_bank #(
+    parameter int WIDTH = 8,
+    parameter int DEPTH = 2
+) (
+    input  logic                    clk,
+    input  logic                    wr_en,
+    input  logic [$clog2(DEPTH)-1:0] wr_addr,
+    input  logic [WIDTH-1:0]        wr_data,
+    input  logic                    rd_en,
+    input  logic [$clog2(DEPTH)-1:0] rd_addr,
+    output logic [WIDTH-1:0]        rd_data
+);
+    (* ram_style = "block" *) logic [WIDTH-1:0] mem[0:DEPTH-1];
+
+    always_ff @(posedge clk) begin
+        if (wr_en) mem[wr_addr] <= wr_data;
+        if (rd_en) rd_data <= mem[rd_addr];
+    end
 endmodule
