@@ -16,7 +16,7 @@ module bnn_fcc_coverage_tb #(
     localparam int NON_INPUT_LAYERS = TOTAL_LAYERS - 1;
     localparam int NUM_CLASSES = TOPOLOGY[TOTAL_LAYERS-1];
     localparam int PARALLEL_INPUTS = 8;
-    localparam int PARALLEL_NEURONS[NON_INPUT_LAYERS] = '{8, 8, 10};
+    localparam int PARALLEL_NEURONS[NON_INPUT_LAYERS] = '{8, 8, 1};
     localparam int INPUTS_PER_BEAT = INPUT_BUS_WIDTH / INPUT_DATA_WIDTH;
     localparam int BYTES_PER_PIXEL = INPUT_DATA_WIDTH / 8;
     localparam int NUM_CONFIG_MSGS = (2 * NON_INPUT_LAYERS) - 1;
@@ -494,6 +494,33 @@ module bnn_fcc_coverage_tb #(
         repeat (3) @(posedge clk);
     endtask
 
+    task automatic print_coverage_summary();
+        real avg_cov;
+
+        avg_cov =
+            (config_msg_cov.get_inst_coverage() +
+             keep_cov.get_inst_coverage() +
+             valid_mode_cov.get_inst_coverage() +
+             ready_mode_cov.get_inst_coverage() +
+             reset_cov.get_inst_coverage() +
+             output_cov.get_inst_coverage() +
+             output_seq_cov.get_inst_coverage() +
+             threshold_cov.get_inst_coverage() +
+             weight_cov.get_inst_coverage()) / 9.0;
+
+        $display("\nCoverage summary:");
+        $display("  config_msg_cov      : %0.1f%%", config_msg_cov.get_inst_coverage());
+        $display("  keep_cov            : %0.1f%%", keep_cov.get_inst_coverage());
+        $display("  valid_mode_cov      : %0.1f%%", valid_mode_cov.get_inst_coverage());
+        $display("  ready_mode_cov      : %0.1f%%", ready_mode_cov.get_inst_coverage());
+        $display("  reset_cov           : %0.1f%%", reset_cov.get_inst_coverage());
+        $display("  output_cov          : %0.1f%%", output_cov.get_inst_coverage());
+        $display("  output_seq_cov      : %0.1f%%", output_seq_cov.get_inst_coverage());
+        $display("  threshold_cov       : %0.1f%%", threshold_cov.get_inst_coverage());
+        $display("  weight_cov          : %0.1f%%", weight_cov.get_inst_coverage());
+        $display("  average covergroup  : %0.1f%%", avg_cov);
+    endtask
+
     initial begin : generate_clock
         forever #HALF_CLK_PERIOD clk <= ~clk;
     end
@@ -623,6 +650,7 @@ module bnn_fcc_coverage_tb #(
         wait_for_outputs(outputs_target);
 
         repeat (5) @(posedge clk);
+        print_coverage_summary();
 
         if (failed == 0) begin
             $display("[%0t] SUCCESS: bnn_fcc_coverage_tb completed with %0d passing checks.", $realtime, passed);

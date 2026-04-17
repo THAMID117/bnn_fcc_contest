@@ -4,16 +4,16 @@
 
 | Item | Result |
 | :--- | :--- |
-| Required `bnn_fcc_tb` verification | `TBD` |
-| Additional coverage testbench | `TBD` |
-| Openflex verification (`bnn_fcc_verify.yml`) | `TBD` |
-| Fmax (MHz) | `TBD` |
+| Required `bnn_fcc_tb` verification | `PASS` |
+| Additional coverage testbench | `PASS` |
+| Openflex verification (`bnn_fcc_verify.yml`) | `PASS` |
+| Fmax (MHz) | `381.53` |
 | Throughput (outputs/sec) | `TBD` |
 | Avg latency (cycles/image) | `TBD` |
-| LUTs | `TBD` |
-| FFs | `TBD` |
-| BRAM | `TBD` |
-| DSPs | `TBD` |
+| LUTs | `3232` |
+| FFs | `1815` |
+| BRAM | `12.5` |
+| DSPs | `0` |
 
 ## Targeted Use Case
 
@@ -27,9 +27,9 @@ This design targets a high-frequency, verification-conscious operating point rat
 For the contest configuration, the implementation uses:
 
 * `PARALLEL_INPUTS = 8`
-* `PARALLEL_NEURONS = '{8, 8, 10}`
+* `PARALLEL_NEURONS = '{8, 8, 1}`
 
-This is an intentional tradeoff: it reduces configuration and inter-layer complexity, keeps the XNOR/popcount/accumulate datapath narrow, and should be favorable for out-of-context `fmax` in the provided openflex flow.
+This is an intentional tradeoff: it reduces configuration and inter-layer complexity, keeps the XNOR/popcount/accumulate datapath narrow, serializes the small output layer to reduce timing pressure, and is favorable for out-of-context `fmax` in the provided openflex flow.
 
 ## RTL Overview
 
@@ -75,6 +75,8 @@ It intentionally stresses:
 * Repeated versus varying classification sequences
 * All 10 output classes in a self-checking randomized scenario
 
+The coverage testbench uses the same contest-candidate datapath parallelism (`PARALLEL_NEURONS = '{8, 8, 1}`) and prints a covergroup summary at the end of a passing run so that additional evaluation is easy to inspect.
+
 ## Reproduction Commands
 
 ### Questa compile
@@ -110,11 +112,31 @@ Paste the relevant success banner and reported latency/throughput statistics her
 
 ### Coverage Testbench
 
-Paste the relevant success banner for `bnn_fcc_coverage_tb` here and summarize the protocol/reset scenarios exercised.
+Run:
+
+```bash
+openflex bnn_fcc_coverage.yml
+```
+
+The expected pass condition is the `SUCCESS: bnn_fcc_coverage_tb completed ...` banner, followed by the printed covergroup summary from the testbench. This testbench is intended to be the additional evaluation point for protocol/reset/ordering coverage beyond the required contest flow.
 
 ### Openflex Timing and Area
 
-Paste the final row from `bnn_fcc.csv` here and summarize the tradeoff.
+Final `bnn_fcc.csv` row:
+
+```text
+8,64,64,4,8,4,381.53376573826785,3232,1728000,2464,1728000,768,791040,1815,3456000,27,216000,282,864000,112,432000,0,216000,12.5,2688,0,1280,0,12288,...
+```
+
+Summary:
+
+* `fMax = 381.53 MHz`
+* `LUT = 3232`
+* `FF = 1815`
+* `BRAM = 12.5`
+* `DSP = 0`
+
+This submission favors a believable, BRAM-backed high-frequency operating point over aggressive output-layer spatial parallelism. The output layer is serialized (`PN2 = 1`) to reduce the routed critical path while keeping the hidden layers at `8` lanes each.
 
 ## Notes / Limitations
 

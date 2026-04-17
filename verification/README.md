@@ -62,6 +62,8 @@ It uses a custom topology chosen to stress:
 
 Use `bnn_fcc_tb.sv` for the required correctness/performance flow and use `bnn_fcc_coverage_tb.sv` to demonstrate stronger verification quality in your report.
 
+The coverage testbench prints both a pass/fail banner and a per-covergroup summary at the end of a successful run, which makes it suitable as an additional evaluation point for external reviewers.
+
 ## Testbench Parameters
 
 The testbench is highly configurable via SystemVerilog parameters. They are grouped into the following categories:

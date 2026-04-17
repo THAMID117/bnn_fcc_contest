@@ -45,13 +45,23 @@ module bnn_fcc #(
         max3 = max2(max2(a, b), c);
     endfunction
 
-    function automatic int popcount_word(input logic [PARALLEL_INPUTS-1:0] value);
-        int count;
-        count = 0;
-        for (int i = 0; i < PARALLEL_INPUTS; i++) begin
-            count += value[i];
-        end
-        popcount_word = count;
+    // Keep the 8-bit XNOR/popcount tree shallow; this is the fixed contest datapath width.
+    function automatic logic [3:0] popcount8(input logic [PARALLEL_INPUTS-1:0] value);
+        logic [1:0] pair0;
+        logic [1:0] pair1;
+        logic [1:0] pair2;
+        logic [1:0] pair3;
+        logic [2:0] half0;
+        logic [2:0] half1;
+
+        pair0 = {1'b0, value[0]} + {1'b0, value[1]};
+        pair1 = {1'b0, value[2]} + {1'b0, value[3]};
+        pair2 = {1'b0, value[4]} + {1'b0, value[5]};
+        pair3 = {1'b0, value[6]} + {1'b0, value[7]};
+
+        half0 = {1'b0, pair0} + {1'b0, pair1};
+        half1 = {1'b0, pair2} + {1'b0, pair3};
+        popcount8 = {1'b0, half0} + {1'b0, half1};
     endfunction
 
     localparam int NON_INPUT_LAYERS = TOTAL_LAYERS - 1;
@@ -612,7 +622,7 @@ module bnn_fcc #(
                         2'd0: begin
                             for (int slot = 0; slot < PN0; slot++) begin
                                 if ((slot < active_neurons) && ((compute_group_idx * PN0 + slot) < layer_neurons)) begin
-                                    accum[slot] <= accum[slot] + popcount_word(~(weight_rd_data_l0[slot] ^ compute_input_word));
+                                    accum[slot] <= accum[slot] + ACC_WIDTH'(popcount8(~(weight_rd_data_l0[slot] ^ compute_input_word)));
                                 end else begin
                                     accum[slot] <= '0;
                                 end
@@ -621,7 +631,7 @@ module bnn_fcc #(
                         2'd1: begin
                             for (int slot = 0; slot < PN1; slot++) begin
                                 if ((slot < active_neurons) && ((compute_group_idx * PN1 + slot) < layer_neurons)) begin
-                                    accum[slot] <= accum[slot] + popcount_word(~(weight_rd_data_l1[slot] ^ compute_input_word));
+                                    accum[slot] <= accum[slot] + ACC_WIDTH'(popcount8(~(weight_rd_data_l1[slot] ^ compute_input_word)));
                                 end else begin
                                     accum[slot] <= '0;
                                 end
@@ -630,7 +640,7 @@ module bnn_fcc #(
                         default: begin
                             for (int slot = 0; slot < PN2; slot++) begin
                                 if ((slot < active_neurons) && ((compute_group_idx * PN2 + slot) < layer_neurons)) begin
-                                    accum[slot] <= accum[slot] + popcount_word(~(weight_rd_data_l2[slot] ^ compute_input_word));
+                                    accum[slot] <= accum[slot] + ACC_WIDTH'(popcount8(~(weight_rd_data_l2[slot] ^ compute_input_word)));
                                 end else begin
                                     accum[slot] <= '0;
                                 end
@@ -757,7 +767,12 @@ module bnn_weight_bank #(
     (* ram_style = "block" *) logic [WIDTH-1:0] mem[0:DEPTH-1];
 
     always_ff @(posedge clk) begin
-        if (wr_en) mem[wr_addr] <= wr_data;
+        if (wr_en) begin
+            mem[wr_addr] <= wr_data;
+        end
+    end
+
+    always_ff @(posedge clk) begin
         if (rd_en) rd_data <= mem[rd_addr];
     end
 endmodule
