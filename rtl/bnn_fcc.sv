@@ -14,21 +14,18 @@ module bnn_fcc #(
     input logic clk,
     input logic rst,
 
-    // AXI streaming configuration interface (consumer)
     input  logic                          config_valid,
     output logic                          config_ready,
     input  logic [  CONFIG_BUS_WIDTH-1:0] config_data,
     input  logic [CONFIG_BUS_WIDTH/8-1:0] config_keep,
     input  logic                          config_last,
 
-    // AXI streaming image input interface (consumer)
     input  logic                         data_in_valid,
     output logic                         data_in_ready,
     input  logic [  INPUT_BUS_WIDTH-1:0] data_in_data,
     input  logic [INPUT_BUS_WIDTH/8-1:0] data_in_keep,
     input  logic                         data_in_last,
 
-    // AXI streaming classification output interface (producer)
     output logic                          data_out_valid,
     input  logic                          data_out_ready,
     output logic [  OUTPUT_BUS_WIDTH-1:0] data_out_data,
@@ -36,70 +33,64 @@ module bnn_fcc #(
     output logic                          data_out_last
 );
 
-    localparam int NON_INPUT_LAYERS = TOTAL_LAYERS - 1;
-    localparam int CONFIG_BYTES_PER_BEAT = CONFIG_BUS_WIDTH / 8;
-    localparam int INPUT_BYTES_PER_BEAT  = INPUT_BUS_WIDTH / 8;
-    localparam int OUTPUT_VALID_BYTES    = (OUTPUT_DATA_WIDTH + 7) / 8;
-    localparam int WEIGHT_BYTES_PER_WORD = PARALLEL_INPUTS / 8;
-
     function automatic int ceil_div(input int value, input int divisor);
         ceil_div = (value + divisor - 1) / divisor;
     endfunction
 
-    function automatic int max_layer_inputs();
-        int max_val;
-        max_val = 1;
-        for (int i = 0; i < NON_INPUT_LAYERS; i++) begin
-            if (TOPOLOGY[i] > max_val) max_val = TOPOLOGY[i];
-        end
-        return max_val;
+    function automatic int max2(input int a, input int b);
+        max2 = (a > b) ? a : b;
     endfunction
 
-    function automatic int max_layer_neurons();
-        int max_val;
-        max_val = 1;
-        for (int i = 1; i < TOTAL_LAYERS; i++) begin
-            if (TOPOLOGY[i] > max_val) max_val = TOPOLOGY[i];
-        end
-        return max_val;
+    function automatic int max3(input int a, input int b, input int c);
+        max3 = max2(max2(a, b), c);
     endfunction
 
-    function automatic int max_parallel_neurons();
-        int max_val;
-        max_val = 1;
-        for (int i = 0; i < NON_INPUT_LAYERS; i++) begin
-            if (PARALLEL_NEURONS[i] > max_val) max_val = PARALLEL_NEURONS[i];
-        end
-        return max_val;
-    endfunction
+    localparam int NON_INPUT_LAYERS = TOTAL_LAYERS - 1;
+    localparam int CONFIG_BYTES_PER_BEAT = CONFIG_BUS_WIDTH / 8;
+    localparam int INPUT_BYTES_PER_BEAT  = INPUT_BUS_WIDTH / 8;
+    localparam int OUTPUT_VALID_BYTES    = (OUTPUT_DATA_WIDTH + 7) / 8;
 
-    function automatic int layer_word_count(input int layer_idx);
-        layer_word_count = ceil_div(TOPOLOGY[layer_idx], PARALLEL_INPUTS);
-    endfunction
+    localparam int L0_INPUTS  = TOPOLOGY[0];
+    localparam int L1_INPUTS  = TOPOLOGY[1];
+    localparam int L2_INPUTS  = TOPOLOGY[2];
+    localparam int L3_OUTPUTS = TOPOLOGY[3];
 
-    function automatic int popcount_word(input logic [PARALLEL_INPUTS-1:0] value);
-        int count;
-        count = 0;
-        for (int i = 0; i < PARALLEL_INPUTS; i++) begin
-            count += value[i];
-        end
-        return count;
-    endfunction
+    localparam int PN0 = PARALLEL_NEURONS[0];
+    localparam int PN1 = PARALLEL_NEURONS[1];
+    localparam int PN2 = PARALLEL_NEURONS[2];
 
-    localparam int MAX_LAYER_INPUTS      = max_layer_inputs();
-    localparam int MAX_LAYER_NEURONS     = max_layer_neurons();
-    localparam int MAX_PARALLEL_NEURONS  = max_parallel_neurons();
-    localparam int MAX_WEIGHT_WORDS      = ceil_div(MAX_LAYER_INPUTS, PARALLEL_INPUTS);
-    localparam int ACC_WIDTH             = (MAX_LAYER_INPUTS > 0) ? $clog2(MAX_LAYER_INPUTS + 1) : 1;
-    localparam int PIXEL_COUNT_WIDTH     = (MAX_LAYER_INPUTS > 0) ? $clog2(MAX_LAYER_INPUTS + 1) : 1;
-    localparam int NEURON_COUNT_WIDTH    = (MAX_LAYER_NEURONS > 0) ? $clog2(MAX_LAYER_NEURONS + 1) : 1;
-    localparam int WORD_COUNT_WIDTH      = (MAX_WEIGHT_WORDS > 0) ? $clog2(MAX_WEIGHT_WORDS + 1) : 1;
+    localparam int L0_WORDS = ceil_div(L0_INPUTS, PARALLEL_INPUTS);
+    localparam int L1_WORDS = ceil_div(L1_INPUTS, PARALLEL_INPUTS);
+    localparam int L2_WORDS = ceil_div(L2_INPUTS, PARALLEL_INPUTS);
+
+    localparam int L0_GROUPS = ceil_div(L1_INPUTS, PN0);
+    localparam int L1_GROUPS = ceil_div(L2_INPUTS, PN1);
+    localparam int L2_GROUPS = ceil_div(L3_OUTPUTS, PN2);
+
+    localparam int L0_SLOT_DEPTH = L0_GROUPS * L0_WORDS;
+    localparam int L1_SLOT_DEPTH = L1_GROUPS * L1_WORDS;
+    localparam int L2_SLOT_DEPTH = L2_GROUPS * L2_WORDS;
+
+    localparam int MAX_INPUTS = max3(L0_INPUTS, L1_INPUTS, L2_INPUTS);
+    localparam int MAX_WORDS  = max3(L0_WORDS, L1_WORDS, L2_WORDS);
+    localparam int MAX_GROUPS = max3(L0_GROUPS, L1_GROUPS, L2_GROUPS);
+    localparam int MAX_PN     = max3(PN0, PN1, PN2);
+
+    localparam int ACC_WIDTH         = (MAX_INPUTS > 0) ? $clog2(MAX_INPUTS + 1) : 1;
+    localparam int PIXEL_COUNT_WIDTH = (L0_INPUTS > 0) ? $clog2(L0_INPUTS + 1) : 1;
+    localparam int WORD_COUNT_WIDTH  = (MAX_WORDS > 1) ? $clog2(MAX_WORDS) : 1;
+    localparam int GROUP_COUNT_WIDTH = (MAX_GROUPS > 1) ? $clog2(MAX_GROUPS) : 1;
+    localparam int BYTE_IDX_WIDTH    = (CONFIG_BYTES_PER_BEAT > 1) ? $clog2(CONFIG_BYTES_PER_BEAT) : 1;
+    localparam int IN_BYTE_IDX_WIDTH = (INPUT_BYTES_PER_BEAT > 1) ? $clog2(INPUT_BYTES_PER_BEAT) : 1;
+    localparam int MSG_BYTES_WIDTH   = (max3(L0_WORDS, L1_WORDS, L2_WORDS) * 8 > 1) ? $clog2(max3(L0_WORDS, L1_WORDS, L2_WORDS) * 8 + 1) : 1;
+
     localparam logic [OUTPUT_BUS_WIDTH/8-1:0] OUTPUT_KEEP_VALUE =
-        (OUTPUT_VALID_BYTES == 0) ? '0 : ({(OUTPUT_BUS_WIDTH/8){1'b1}} >> ((OUTPUT_BUS_WIDTH/8) - OUTPUT_VALID_BYTES));
+        ({(OUTPUT_BUS_WIDTH/8){1'b1}} >> ((OUTPUT_BUS_WIDTH/8) - OUTPUT_VALID_BYTES));
 
     typedef enum logic [2:0] {
         STATE_CONFIG,
         STATE_WAIT_IMAGE,
+        STATE_COMPUTE_READ,
         STATE_COMPUTE_ACCUM,
         STATE_COMPUTE_WRITE,
         STATE_OUTPUT
@@ -107,58 +98,98 @@ module bnn_fcc #(
 
     state_t state;
 
-    logic [PARALLEL_INPUTS-1:0] weight_mem[NON_INPUT_LAYERS][MAX_LAYER_NEURONS][MAX_WEIGHT_WORDS];
-    logic [31:0] threshold_mem[NON_INPUT_LAYERS][MAX_LAYER_NEURONS];
-    logic [PARALLEL_INPUTS-1:0] layer_input_mem[NON_INPUT_LAYERS][MAX_WEIGHT_WORDS];
+    (* ram_style = "block" *) logic [PARALLEL_INPUTS-1:0] weight_mem_l0[0:PN0-1][0:L0_SLOT_DEPTH-1];
+    (* ram_style = "block" *) logic [PARALLEL_INPUTS-1:0] weight_mem_l1[0:PN1-1][0:L1_SLOT_DEPTH-1];
+    (* ram_style = "block" *) logic [PARALLEL_INPUTS-1:0] weight_mem_l2[0:PN2-1][0:L2_SLOT_DEPTH-1];
 
-    logic [ACC_WIDTH-1:0] accum[MAX_PARALLEL_NEURONS];
+    logic [31:0] threshold_mem_l0[0:PN0-1][0:L0_GROUPS-1];
+    logic [31:0] threshold_mem_l1[0:PN1-1][0:L1_GROUPS-1];
 
-    logic [NON_INPUT_LAYERS-1:0] weights_loaded;
-    logic [NON_INPUT_LAYERS-1:0] thresholds_loaded;
-    logic                        all_layers_loaded;
+    logic [PARALLEL_INPUTS-1:0] input_buf_l0[0:L0_WORDS-1];
+    logic [PARALLEL_INPUTS-1:0] input_buf_l1[0:L1_WORDS-1];
+    logic [PARALLEL_INPUTS-1:0] input_buf_l2[0:L2_WORDS-1];
 
-    logic                         cfg_beat_pending;
-    logic [  CONFIG_BUS_WIDTH-1:0] cfg_beat_data;
+    logic [PARALLEL_INPUTS-1:0] weight_rd_data_l0[0:PN0-1];
+    logic [PARALLEL_INPUTS-1:0] weight_rd_data_l1[0:PN1-1];
+    logic [PARALLEL_INPUTS-1:0] weight_rd_data_l2[0:PN2-1];
+
+    logic [ACC_WIDTH-1:0] accum[0:MAX_PN-1];
+    logic [ACC_WIDTH-1:0] best_score;
+    logic [OUTPUT_DATA_WIDTH-1:0] best_class;
+    logic [PARALLEL_INPUTS-1:0] compute_input_word;
+
+    logic weights_loaded_l0;
+    logic weights_loaded_l1;
+    logic weights_loaded_l2;
+    logic thresholds_loaded_l0;
+    logic thresholds_loaded_l1;
+    logic all_layers_loaded;
+
+    logic [CONFIG_BUS_WIDTH-1:0] cfg_beat_data;
     logic [CONFIG_BYTES_PER_BEAT-1:0] cfg_beat_keep;
-    logic                         cfg_beat_last;
-    logic [$clog2(CONFIG_BYTES_PER_BEAT+1)-1:0] cfg_beat_byte_idx;
+    logic cfg_beat_pending;
+    logic [BYTE_IDX_WIDTH-1:0] cfg_beat_byte_idx;
 
-    logic                         cfg_in_payload;
-    logic [3:0]                   cfg_header_byte_idx;
-    logic [127:0]                 cfg_header;
-    logic [7:0]                   cfg_msg_type;
-    logic [7:0]                   cfg_layer_id;
-    logic [15:0]                  cfg_layer_inputs;
-    logic [15:0]                  cfg_num_neurons;
-    logic [15:0]                  cfg_bytes_per_neuron;
-    logic [31:0]                  cfg_total_bytes;
-    logic [31:0]                  cfg_payload_bytes_left;
-    logic [NEURON_COUNT_WIDTH-1:0] cfg_neuron_idx;
-    logic [15:0]                  cfg_byte_in_neuron;
-    logic [1:0]                   cfg_threshold_byte_idx;
-    logic [31:0]                  cfg_threshold_shift;
+    logic cfg_in_payload;
+    logic [3:0] cfg_header_byte_idx;
+    logic [127:0] cfg_header;
+    logic [7:0] cfg_msg_type;
+    logic [7:0] cfg_layer_id;
+    logic [15:0] cfg_bytes_per_neuron;
+    logic [31:0] cfg_payload_bytes_left;
+    logic [GROUP_COUNT_WIDTH:0] cfg_neuron_idx;
+    logic [MSG_BYTES_WIDTH-1:0] cfg_byte_in_neuron;
+    logic [1:0] cfg_threshold_byte_idx;
+    logic [31:0] cfg_threshold_shift;
 
-    logic                        in_beat_pending;
-    logic [  INPUT_BUS_WIDTH-1:0] in_beat_data;
+    logic [INPUT_BUS_WIDTH-1:0] in_beat_data;
     logic [INPUT_BYTES_PER_BEAT-1:0] in_beat_keep;
-    logic                        in_beat_last;
-    logic [$clog2(INPUT_BYTES_PER_BEAT+1)-1:0] in_beat_byte_idx;
+    logic in_beat_pending;
+    logic [IN_BYTE_IDX_WIDTH-1:0] in_beat_byte_idx;
     logic [PIXEL_COUNT_WIDTH-1:0] image_pixels_loaded;
-    logic                        image_complete;
+    logic image_complete;
 
-    logic [$clog2(NON_INPUT_LAYERS+1)-1:0] compute_layer;
-    logic [NEURON_COUNT_WIDTH-1:0]         compute_neuron_base;
-    logic [WORD_COUNT_WIDTH-1:0]           compute_word_idx;
-    logic [ACC_WIDTH-1:0]                  best_score;
-    logic [OUTPUT_DATA_WIDTH-1:0]          best_class;
+    logic [1:0] compute_layer;
+    logic [GROUP_COUNT_WIDTH-1:0] compute_group_idx;
+    logic [WORD_COUNT_WIDTH-1:0]  compute_word_idx;
 
-    logic [OUTPUT_BUS_WIDTH-1:0]           out_data_reg;
+    logic [OUTPUT_BUS_WIDTH-1:0] out_data_reg;
+
+    function automatic int input_words_for_layer(input logic [1:0] layer_id);
+        case (layer_id)
+            2'd0: input_words_for_layer = L0_WORDS;
+            2'd1: input_words_for_layer = L1_WORDS;
+            default: input_words_for_layer = L2_WORDS;
+        endcase
+    endfunction
+
+    function automatic int groups_for_layer(input logic [1:0] layer_id);
+        case (layer_id)
+            2'd0: groups_for_layer = L0_GROUPS;
+            2'd1: groups_for_layer = L1_GROUPS;
+            default: groups_for_layer = L2_GROUPS;
+        endcase
+    endfunction
+
+    function automatic int neurons_for_layer(input logic [1:0] layer_id);
+        case (layer_id)
+            2'd0: neurons_for_layer = L1_INPUTS;
+            2'd1: neurons_for_layer = L2_INPUTS;
+            default: neurons_for_layer = L3_OUTPUTS;
+        endcase
+    endfunction
+
+    function automatic int parallel_neurons_for_layer(input logic [1:0] layer_id);
+        case (layer_id)
+            2'd0: parallel_neurons_for_layer = PN0;
+            2'd1: parallel_neurons_for_layer = PN1;
+            default: parallel_neurons_for_layer = PN2;
+        endcase
+    endfunction
 
     always_comb begin
-        all_layers_loaded = 1'b1;
-        for (int i = 0; i < NON_INPUT_LAYERS; i++) begin
-            all_layers_loaded &= weights_loaded[i] & thresholds_loaded[i];
-        end
+        all_layers_loaded = weights_loaded_l0 & weights_loaded_l1 & weights_loaded_l2 &
+            thresholds_loaded_l0 & thresholds_loaded_l1;
     end
 
     assign config_ready  = (state == STATE_CONFIG) && !cfg_beat_pending && !all_layers_loaded;
@@ -170,287 +201,385 @@ module bnn_fcc #(
     assign data_out_last  = (state == STATE_OUTPUT);
 
     initial begin
+        assert (TOTAL_LAYERS == 4)
+        else $fatal(1, "This contest implementation expects TOTAL_LAYERS=4.");
+
         assert (INPUT_DATA_WIDTH == 8)
         else $fatal(1, "bnn_fcc requires INPUT_DATA_WIDTH=8.");
 
-        assert (CONFIG_BUS_WIDTH % 8 == 0)
-        else $fatal(1, "CONFIG_BUS_WIDTH must be byte aligned.");
+        assert (CONFIG_BUS_WIDTH == 64 && INPUT_BUS_WIDTH == 64 && OUTPUT_BUS_WIDTH == 8)
+        else $fatal(1, "This contest implementation expects the default bus widths.");
 
-        assert (INPUT_BUS_WIDTH % 8 == 0)
-        else $fatal(1, "INPUT_BUS_WIDTH must be byte aligned.");
+        assert (PARALLEL_INPUTS == 8)
+        else $fatal(1, "This implementation expects PARALLEL_INPUTS=8.");
 
-        assert (PARALLEL_INPUTS > 0 && (PARALLEL_INPUTS % 8) == 0)
-        else $fatal(1, "This implementation requires PARALLEL_INPUTS to be a positive multiple of 8.");
-
-        for (int i = 0; i < NON_INPUT_LAYERS - 1; i++) begin
-            assert (PARALLEL_NEURONS[i] == PARALLEL_INPUTS)
-            else $fatal(1, "Hidden-layer PARALLEL_NEURONS must match PARALLEL_INPUTS for this architecture.");
-        end
+        assert (PN0 == PARALLEL_INPUTS && PN1 == PARALLEL_INPUTS)
+        else $fatal(1, "Hidden-layer PARALLEL_NEURONS must match PARALLEL_INPUTS.");
     end
 
     always_ff @(posedge clk) begin
         if (rst) begin
             state <= STATE_CONFIG;
 
-            cfg_beat_pending    <= 1'b0;
-            cfg_beat_data       <= '0;
-            cfg_beat_keep       <= '0;
-            cfg_beat_last       <= 1'b0;
-            cfg_beat_byte_idx   <= '0;
-            cfg_in_payload      <= 1'b0;
-            cfg_header_byte_idx <= '0;
-            cfg_header          <= '0;
-            cfg_msg_type        <= '0;
-            cfg_layer_id        <= '0;
-            cfg_layer_inputs    <= '0;
-            cfg_num_neurons     <= '0;
+            weights_loaded_l0    <= 1'b0;
+            weights_loaded_l1    <= 1'b0;
+            weights_loaded_l2    <= 1'b0;
+            thresholds_loaded_l0 <= 1'b0;
+            thresholds_loaded_l1 <= 1'b0;
+
+            cfg_beat_data        <= '0;
+            cfg_beat_keep        <= '0;
+            cfg_beat_pending     <= 1'b0;
+            cfg_beat_byte_idx    <= '0;
+            cfg_in_payload       <= 1'b0;
+            cfg_header_byte_idx  <= '0;
+            cfg_header           <= '0;
+            cfg_msg_type         <= '0;
+            cfg_layer_id         <= '0;
             cfg_bytes_per_neuron <= '0;
-            cfg_total_bytes     <= '0;
             cfg_payload_bytes_left <= '0;
-            cfg_neuron_idx      <= '0;
-            cfg_byte_in_neuron  <= '0;
+            cfg_neuron_idx       <= '0;
+            cfg_byte_in_neuron   <= '0;
             cfg_threshold_byte_idx <= '0;
-            cfg_threshold_shift <= '0;
+            cfg_threshold_shift  <= '0;
 
-            in_beat_pending     <= 1'b0;
-            in_beat_data        <= '0;
-            in_beat_keep        <= '0;
-            in_beat_last        <= 1'b0;
-            in_beat_byte_idx    <= '0;
-            image_pixels_loaded <= '0;
-            image_complete      <= 1'b0;
+            in_beat_data         <= '0;
+            in_beat_keep         <= '0;
+            in_beat_pending      <= 1'b0;
+            in_beat_byte_idx     <= '0;
+            image_pixels_loaded  <= '0;
+            image_complete       <= 1'b0;
 
-            compute_layer       <= '0;
-            compute_neuron_base <= '0;
-            compute_word_idx    <= '0;
-            best_score          <= '0;
-            best_class          <= '0;
-            out_data_reg        <= '0;
+            compute_layer        <= '0;
+            compute_group_idx    <= '0;
+            compute_word_idx     <= '0;
+            compute_input_word   <= '0;
+            best_score           <= '0;
+            best_class           <= '0;
+            out_data_reg         <= '0;
 
-            for (int l = 0; l < NON_INPUT_LAYERS; l++) begin
-                weights_loaded[l]    <= 1'b0;
-                thresholds_loaded[l] <= (l == NON_INPUT_LAYERS - 1);
-
-                for (int n = 0; n < MAX_LAYER_NEURONS; n++) begin
-                    threshold_mem[l][n] <= '0;
-                    for (int w = 0; w < MAX_WEIGHT_WORDS; w++) begin
-                        weight_mem[l][n][w] <= {PARALLEL_INPUTS{1'b1}};
-                    end
-                end
-
-                for (int w = 0; w < MAX_WEIGHT_WORDS; w++) begin
-                    layer_input_mem[l][w] <= '0;
-                end
-            end
-
-            for (int i = 0; i < MAX_PARALLEL_NEURONS; i++) begin
+            for (int i = 0; i < MAX_PN; i++) begin
                 accum[i] <= '0;
             end
+
+            for (int s = 0; s < PN0; s++) begin
+                weight_rd_data_l0[s] <= '0;
+                for (int g = 0; g < L0_GROUPS; g++) threshold_mem_l0[s][g] <= '0;
+                for (int a = 0; a < L0_SLOT_DEPTH; a++) weight_mem_l0[s][a] <= {PARALLEL_INPUTS{1'b1}};
+            end
+
+            for (int s = 0; s < PN1; s++) begin
+                weight_rd_data_l1[s] <= '0;
+                for (int g = 0; g < L1_GROUPS; g++) threshold_mem_l1[s][g] <= '0;
+                for (int a = 0; a < L1_SLOT_DEPTH; a++) weight_mem_l1[s][a] <= {PARALLEL_INPUTS{1'b1}};
+            end
+
+            for (int s = 0; s < PN2; s++) begin
+                weight_rd_data_l2[s] <= '0;
+                for (int a = 0; a < L2_SLOT_DEPTH; a++) weight_mem_l2[s][a] <= {PARALLEL_INPUTS{1'b1}};
+            end
+
+            for (int w = 0; w < L0_WORDS; w++) input_buf_l0[w] <= '0;
+            for (int w = 0; w < L1_WORDS; w++) input_buf_l1[w] <= '0;
+            for (int w = 0; w < L2_WORDS; w++) input_buf_l2[w] <= '0;
         end else begin
             case (state)
                 STATE_CONFIG: begin
                     if (cfg_beat_pending) begin
-                        if (cfg_beat_byte_idx < CONFIG_BYTES_PER_BEAT) begin
-                            if (cfg_beat_keep[cfg_beat_byte_idx]) begin
-                                logic [7:0] cfg_byte;
-                                cfg_byte = cfg_beat_data[cfg_beat_byte_idx*8+:8];
+                        logic [7:0] cfg_byte;
 
-                                if (!cfg_in_payload) begin
-                                    logic [127:0] next_header;
-                                    next_header = cfg_header;
-                                    next_header[cfg_header_byte_idx*8+:8] = cfg_byte;
-                                    cfg_header <= next_header;
+                        cfg_byte = cfg_beat_data[cfg_beat_byte_idx*8+:8];
 
-                                    if (cfg_header_byte_idx == 4'd15) begin
-                                        cfg_in_payload         <= 1'b1;
-                                        cfg_header_byte_idx    <= '0;
-                                        cfg_msg_type           <= next_header[7:0];
-                                        cfg_layer_id           <= next_header[15:8];
-                                        cfg_layer_inputs       <= next_header[31:16];
-                                        cfg_num_neurons        <= next_header[47:32];
-                                        cfg_bytes_per_neuron   <= next_header[63:48];
-                                        cfg_total_bytes        <= next_header[95:64];
-                                        cfg_payload_bytes_left <= next_header[95:64];
-                                        cfg_neuron_idx         <= '0;
-                                        cfg_byte_in_neuron     <= '0;
-                                        cfg_threshold_byte_idx <= '0;
-                                        cfg_threshold_shift    <= '0;
-                                    end else begin
-                                        cfg_header_byte_idx <= cfg_header_byte_idx + 1'b1;
-                                    end
+                        if (cfg_beat_keep[cfg_beat_byte_idx]) begin
+                            if (!cfg_in_payload) begin
+                                logic [127:0] next_header;
+
+                                next_header = cfg_header;
+                                next_header[cfg_header_byte_idx*8+:8] = cfg_byte;
+                                cfg_header  <= next_header;
+
+                                if (cfg_header_byte_idx == 4'd15) begin
+                                    cfg_in_payload        <= 1'b1;
+                                    cfg_header_byte_idx   <= '0;
+                                    cfg_msg_type          <= next_header[7:0];
+                                    cfg_layer_id          <= next_header[15:8];
+                                    cfg_bytes_per_neuron  <= next_header[63:48];
+                                    cfg_payload_bytes_left <= next_header[95:64];
+                                    cfg_neuron_idx        <= '0;
+                                    cfg_byte_in_neuron    <= '0;
+                                    cfg_threshold_byte_idx <= '0;
+                                    cfg_threshold_shift   <= '0;
                                 end else begin
-                                    if (cfg_msg_type == 8'd0) begin
-                                        int word_idx;
-                                        int byte_in_word;
-                                        logic [PARALLEL_INPUTS-1:0] next_word;
+                                    cfg_header_byte_idx <= cfg_header_byte_idx + 1'b1;
+                                end
+                            end else begin
+                                if (cfg_msg_type == 8'd0) begin
+                                    int cfg_slot;
+                                    int cfg_group;
+                                    int cfg_addr;
 
-                                        word_idx     = cfg_byte_in_neuron / WEIGHT_BYTES_PER_WORD;
-                                        byte_in_word = cfg_byte_in_neuron % WEIGHT_BYTES_PER_WORD;
-                                        next_word    = (byte_in_word == 0) ? {PARALLEL_INPUTS{1'b1}} : weight_mem[cfg_layer_id][cfg_neuron_idx][word_idx];
-                                        next_word[byte_in_word*8+:8] = cfg_byte;
-                                        weight_mem[cfg_layer_id][cfg_neuron_idx][word_idx] <= next_word;
-                                    end else begin
-                                        logic [31:0] next_threshold;
-                                        next_threshold = cfg_threshold_shift;
-                                        next_threshold[cfg_threshold_byte_idx*8+:8] = cfg_byte;
-                                        cfg_threshold_shift <= next_threshold;
-
-                                        if (cfg_threshold_byte_idx == 2'd3) begin
-                                            threshold_mem[cfg_layer_id][cfg_neuron_idx] <= next_threshold;
-                                            cfg_threshold_byte_idx <= '0;
-                                            cfg_threshold_shift <= '0;
-                                        end else begin
-                                            cfg_threshold_byte_idx <= cfg_threshold_byte_idx + 1'b1;
+                                    case (cfg_layer_id)
+                                        8'd0: begin
+                                            cfg_slot = cfg_neuron_idx % PN0;
+                                            cfg_group = cfg_neuron_idx / PN0;
+                                            cfg_addr = cfg_group * L0_WORDS + cfg_byte_in_neuron;
+                                            weight_mem_l0[cfg_slot][cfg_addr] <= cfg_byte;
                                         end
-                                    end
-
-                                    if (cfg_msg_type == 8'd0) begin
-                                        if (cfg_byte_in_neuron == cfg_bytes_per_neuron - 1) begin
-                                            cfg_byte_in_neuron <= '0;
-                                            cfg_neuron_idx <= cfg_neuron_idx + 1'b1;
-                                        end else begin
-                                            cfg_byte_in_neuron <= cfg_byte_in_neuron + 1'b1;
+                                        8'd1: begin
+                                            cfg_slot = cfg_neuron_idx % PN1;
+                                            cfg_group = cfg_neuron_idx / PN1;
+                                            cfg_addr = cfg_group * L1_WORDS + cfg_byte_in_neuron;
+                                            weight_mem_l1[cfg_slot][cfg_addr] <= cfg_byte;
                                         end
-                                    end else begin
-                                        if (cfg_threshold_byte_idx == 2'd3) begin
-                                            cfg_neuron_idx <= cfg_neuron_idx + 1'b1;
+                                        default: begin
+                                            cfg_slot = cfg_neuron_idx % PN2;
+                                            cfg_group = cfg_neuron_idx / PN2;
+                                            cfg_addr = cfg_group * L2_WORDS + cfg_byte_in_neuron;
+                                            weight_mem_l2[cfg_slot][cfg_addr] <= cfg_byte;
                                         end
-                                    end
+                                    endcase
+                                end else begin
+                                    logic [31:0] next_threshold;
+                                    int cfg_slot;
+                                    int cfg_group;
 
-                                    if (cfg_payload_bytes_left == 32'd1) begin
-                                        cfg_in_payload         <= 1'b0;
-                                        cfg_payload_bytes_left <= '0;
-                                        cfg_header             <= '0;
-                                        cfg_header_byte_idx    <= '0;
-                                        cfg_neuron_idx         <= '0;
-                                        cfg_byte_in_neuron     <= '0;
+                                    next_threshold = cfg_threshold_shift;
+                                    next_threshold[cfg_threshold_byte_idx*8+:8] = cfg_byte;
+                                    cfg_threshold_shift <= next_threshold;
+
+                                    if (cfg_threshold_byte_idx == 2'd3) begin
+                                        case (cfg_layer_id)
+                                            8'd0: begin
+                                                cfg_slot  = cfg_neuron_idx % PN0;
+                                                cfg_group = cfg_neuron_idx / PN0;
+                                                threshold_mem_l0[cfg_slot][cfg_group] <= next_threshold;
+                                            end
+                                            default: begin
+                                                cfg_slot  = cfg_neuron_idx % PN1;
+                                                cfg_group = cfg_neuron_idx / PN1;
+                                                threshold_mem_l1[cfg_slot][cfg_group] <= next_threshold;
+                                            end
+                                        endcase
                                         cfg_threshold_byte_idx <= '0;
                                         cfg_threshold_shift    <= '0;
-
-                                        if (cfg_msg_type == 8'd0) weights_loaded[cfg_layer_id] <= 1'b1;
-                                        else thresholds_loaded[cfg_layer_id] <= 1'b1;
                                     end else begin
-                                        cfg_payload_bytes_left <= cfg_payload_bytes_left - 1'b1;
+                                        cfg_threshold_byte_idx <= cfg_threshold_byte_idx + 1'b1;
                                     end
                                 end
-                            end
 
-                            if (cfg_beat_byte_idx == CONFIG_BYTES_PER_BEAT - 1) begin
-                                cfg_beat_pending  <= 1'b0;
-                                cfg_beat_byte_idx <= '0;
-                                cfg_beat_last     <= 1'b0;
-                            end else begin
-                                cfg_beat_byte_idx <= cfg_beat_byte_idx + 1'b1;
+                                if (cfg_msg_type == 8'd0) begin
+                                    if (cfg_byte_in_neuron + 1 >= cfg_bytes_per_neuron) begin
+                                        cfg_byte_in_neuron <= '0;
+                                        cfg_neuron_idx     <= cfg_neuron_idx + 1'b1;
+                                    end else begin
+                                        cfg_byte_in_neuron <= cfg_byte_in_neuron + 1'b1;
+                                    end
+                                end else if (cfg_threshold_byte_idx == 2'd3) begin
+                                    cfg_neuron_idx <= cfg_neuron_idx + 1'b1;
+                                end
+
+                                if (cfg_payload_bytes_left == 32'd1) begin
+                                    cfg_in_payload        <= 1'b0;
+                                    cfg_header            <= '0;
+                                    cfg_header_byte_idx   <= '0;
+                                    cfg_payload_bytes_left <= '0;
+                                    cfg_neuron_idx        <= '0;
+                                    cfg_byte_in_neuron    <= '0;
+                                    cfg_threshold_byte_idx <= '0;
+                                    cfg_threshold_shift   <= '0;
+
+                                    if (cfg_msg_type == 8'd0) begin
+                                        case (cfg_layer_id)
+                                            8'd0: weights_loaded_l0 <= 1'b1;
+                                            8'd1: weights_loaded_l1 <= 1'b1;
+                                            default: weights_loaded_l2 <= 1'b1;
+                                        endcase
+                                    end else begin
+                                        case (cfg_layer_id)
+                                            8'd0: thresholds_loaded_l0 <= 1'b1;
+                                            default: thresholds_loaded_l1 <= 1'b1;
+                                        endcase
+                                    end
+                                end else begin
+                                    cfg_payload_bytes_left <= cfg_payload_bytes_left - 1'b1;
+                                end
                             end
+                        end
+
+                        if (cfg_beat_byte_idx + 1 >= CONFIG_BYTES_PER_BEAT) begin
+                            cfg_beat_pending  <= 1'b0;
+                            cfg_beat_byte_idx <= '0;
+                        end else begin
+                            cfg_beat_byte_idx <= cfg_beat_byte_idx + 1'b1;
                         end
                     end else if (config_valid) begin
                         cfg_beat_pending  <= 1'b1;
                         cfg_beat_data     <= config_data;
                         cfg_beat_keep     <= config_keep;
-                        cfg_beat_last     <= config_last;
                         cfg_beat_byte_idx <= '0;
                     end else if (all_layers_loaded) begin
-                        state              <= STATE_WAIT_IMAGE;
-                        image_pixels_loaded <= '0;
-                        image_complete      <= 1'b0;
+                        state <= STATE_WAIT_IMAGE;
                     end
                 end
 
                 STATE_WAIT_IMAGE: begin
                     if (in_beat_pending) begin
-                        if (in_beat_byte_idx < INPUT_BYTES_PER_BEAT) begin
-                            if (in_beat_keep[in_beat_byte_idx] && image_pixels_loaded < TOPOLOGY[0]) begin
-                                int word_idx;
-                                int bit_idx;
-                                logic [7:0] pixel_byte;
-                                logic [PARALLEL_INPUTS-1:0] next_input_word;
+                        if (in_beat_keep[in_beat_byte_idx] && image_pixels_loaded < L0_INPUTS) begin
+                            int word_idx;
+                            int bit_idx;
+                            logic [7:0] pixel_byte;
+                            logic [PARALLEL_INPUTS-1:0] next_input_word;
 
-                                pixel_byte = in_beat_data[in_beat_byte_idx*8+:8];
-                                word_idx   = image_pixels_loaded / PARALLEL_INPUTS;
-                                bit_idx    = image_pixels_loaded % PARALLEL_INPUTS;
-                                next_input_word = (bit_idx == 0) ? '0 : layer_input_mem[0][word_idx];
-                                next_input_word[bit_idx] = (pixel_byte >= 8'd128);
-                                layer_input_mem[0][word_idx] <= next_input_word;
+                            pixel_byte = in_beat_data[in_beat_byte_idx*8+:8];
+                            word_idx   = image_pixels_loaded / PARALLEL_INPUTS;
+                            bit_idx    = image_pixels_loaded % PARALLEL_INPUTS;
+                            next_input_word = (bit_idx == 0) ? '0 : input_buf_l0[word_idx];
+                            next_input_word[bit_idx] = (pixel_byte >= 8'd128);
+                            input_buf_l0[word_idx] <= next_input_word;
 
-                                if (image_pixels_loaded == TOPOLOGY[0] - 1) begin
-                                    image_complete <= 1'b1;
-                                end
-                                image_pixels_loaded <= image_pixels_loaded + 1'b1;
-                            end
+                            if (image_pixels_loaded + 1 >= L0_INPUTS) image_complete <= 1'b1;
+                            image_pixels_loaded <= image_pixels_loaded + 1'b1;
+                        end
 
-                            if (in_beat_byte_idx == INPUT_BYTES_PER_BEAT - 1) begin
-                                in_beat_pending  <= 1'b0;
-                                in_beat_byte_idx <= '0;
-                            end else begin
-                                in_beat_byte_idx <= in_beat_byte_idx + 1'b1;
-                            end
+                        if (in_beat_byte_idx + 1 >= INPUT_BYTES_PER_BEAT) begin
+                            in_beat_pending  <= 1'b0;
+                            in_beat_byte_idx <= '0;
+                        end else begin
+                            in_beat_byte_idx <= in_beat_byte_idx + 1'b1;
                         end
                     end else if (image_complete) begin
-                        state              <= STATE_COMPUTE_ACCUM;
-                        compute_layer       <= '0;
-                        compute_neuron_base <= '0;
-                        compute_word_idx    <= '0;
-                        best_score          <= '0;
-                        best_class          <= '0;
-                        for (int i = 0; i < MAX_PARALLEL_NEURONS; i++) begin
-                            accum[i] <= '0;
-                        end
+                        state             <= STATE_COMPUTE_READ;
+                        compute_layer     <= '0;
+                        compute_group_idx <= '0;
+                        compute_word_idx  <= '0;
+                        compute_input_word <= '0;
+                        best_score        <= '0;
+                        best_class        <= '0;
+
+                        for (int i = 0; i < MAX_PN; i++) accum[i] <= '0;
                     end else if (data_in_valid) begin
                         in_beat_pending  <= 1'b1;
                         in_beat_data     <= data_in_data;
                         in_beat_keep     <= data_in_keep;
-                        in_beat_last     <= data_in_last;
                         in_beat_byte_idx <= '0;
                     end
                 end
 
-                STATE_COMPUTE_ACCUM: begin
-                    int active_neurons;
+                STATE_COMPUTE_READ: begin
                     int input_words;
-                    logic [PARALLEL_INPUTS-1:0] input_word;
+                    int active_neurons;
+                    int layer_neurons;
 
-                    active_neurons = PARALLEL_NEURONS[compute_layer];
-                    input_words    = layer_word_count(compute_layer);
-                    input_word     = layer_input_mem[compute_layer][compute_word_idx];
+                    input_words    = input_words_for_layer(compute_layer);
+                    active_neurons = parallel_neurons_for_layer(compute_layer);
+                    layer_neurons  = neurons_for_layer(compute_layer);
 
-                    for (int slot = 0; slot < MAX_PARALLEL_NEURONS; slot++) begin
-                        if ((slot < active_neurons) && ((compute_neuron_base + slot) < TOPOLOGY[compute_layer+1])) begin
-                            logic [PARALLEL_INPUTS-1:0] xnor_word;
-                            xnor_word = ~(weight_mem[compute_layer][compute_neuron_base + slot][compute_word_idx] ^ input_word);
-                            accum[slot] <= accum[slot] + popcount_word(xnor_word);
-                        end else begin
-                            accum[slot] <= '0;
+                    case (compute_layer)
+                        2'd0: compute_input_word <= input_buf_l0[compute_word_idx];
+                        2'd1: compute_input_word <= input_buf_l1[compute_word_idx];
+                        default: compute_input_word <= input_buf_l2[compute_word_idx];
+                    endcase
+
+                    case (compute_layer)
+                        2'd0: begin
+                            for (int slot = 0; slot < PN0; slot++) begin
+                                if ((slot < active_neurons) && ((compute_group_idx * PN0 + slot) < layer_neurons)) begin
+                                    weight_rd_data_l0[slot] <= weight_mem_l0[slot][compute_group_idx * L0_WORDS + compute_word_idx];
+                                end
+                            end
                         end
-                    end
+                        2'd1: begin
+                            for (int slot = 0; slot < PN1; slot++) begin
+                                if ((slot < active_neurons) && ((compute_group_idx * PN1 + slot) < layer_neurons)) begin
+                                    weight_rd_data_l1[slot] <= weight_mem_l1[slot][compute_group_idx * L1_WORDS + compute_word_idx];
+                                end
+                            end
+                        end
+                        default: begin
+                            for (int slot = 0; slot < PN2; slot++) begin
+                                if ((slot < active_neurons) && ((compute_group_idx * PN2 + slot) < layer_neurons)) begin
+                                    weight_rd_data_l2[slot] <= weight_mem_l2[slot][compute_group_idx * L2_WORDS + compute_word_idx];
+                                end
+                            end
+                        end
+                    endcase
+
+                    state <= STATE_COMPUTE_ACCUM;
+                end
+
+                STATE_COMPUTE_ACCUM: begin
+                    int input_words;
+                    int active_neurons;
+                    int layer_neurons;
+
+                    input_words    = input_words_for_layer(compute_layer);
+                    active_neurons = parallel_neurons_for_layer(compute_layer);
+                    layer_neurons  = neurons_for_layer(compute_layer);
+
+                    case (compute_layer)
+                        2'd0: begin
+                            for (int slot = 0; slot < PN0; slot++) begin
+                                if ((slot < active_neurons) && ((compute_group_idx * PN0 + slot) < layer_neurons)) begin
+                                    accum[slot] <= accum[slot] + popcount_word(~(weight_rd_data_l0[slot] ^ compute_input_word));
+                                end else begin
+                                    accum[slot] <= '0;
+                                end
+                            end
+                        end
+                        2'd1: begin
+                            for (int slot = 0; slot < PN1; slot++) begin
+                                if ((slot < active_neurons) && ((compute_group_idx * PN1 + slot) < layer_neurons)) begin
+                                    accum[slot] <= accum[slot] + popcount_word(~(weight_rd_data_l1[slot] ^ compute_input_word));
+                                end else begin
+                                    accum[slot] <= '0;
+                                end
+                            end
+                        end
+                        default: begin
+                            for (int slot = 0; slot < PN2; slot++) begin
+                                if ((slot < active_neurons) && ((compute_group_idx * PN2 + slot) < layer_neurons)) begin
+                                    accum[slot] <= accum[slot] + popcount_word(~(weight_rd_data_l2[slot] ^ compute_input_word));
+                                end else begin
+                                    accum[slot] <= '0;
+                                end
+                            end
+                        end
+                    endcase
 
                     if (compute_word_idx + 1 >= input_words) begin
                         state <= STATE_COMPUTE_WRITE;
                     end else begin
                         compute_word_idx <= compute_word_idx + 1'b1;
+                        state <= STATE_COMPUTE_READ;
                     end
                 end
 
                 STATE_COMPUTE_WRITE: begin
                     int active_neurons;
                     int layer_neurons;
+                    int total_groups;
                     logic [PARALLEL_INPUTS-1:0] activation_word;
 
-                    active_neurons = PARALLEL_NEURONS[compute_layer];
-                    layer_neurons  = TOPOLOGY[compute_layer+1];
+                    active_neurons = parallel_neurons_for_layer(compute_layer);
+                    layer_neurons  = neurons_for_layer(compute_layer);
+                    total_groups   = groups_for_layer(compute_layer);
                     activation_word = '0;
 
-                    if (compute_layer == NON_INPUT_LAYERS - 1) begin
+                    if (compute_layer == 2'd2) begin
                         logic [ACC_WIDTH-1:0] temp_best_score;
                         logic [OUTPUT_DATA_WIDTH-1:0] temp_best_class;
 
                         temp_best_score = best_score;
                         temp_best_class = best_class;
 
-                        for (int slot = 0; slot < MAX_PARALLEL_NEURONS; slot++) begin
-                            if ((slot < active_neurons) && ((compute_neuron_base + slot) < layer_neurons)) begin
+                        for (int slot = 0; slot < PN2; slot++) begin
+                            int neuron_idx;
+
+                            neuron_idx = compute_group_idx * PN2 + slot;
+                            if ((slot < active_neurons) && (neuron_idx < layer_neurons)) begin
                                 if (accum[slot] > temp_best_score) begin
                                     temp_best_score = accum[slot];
-                                    temp_best_class = OUTPUT_DATA_WIDTH'(compute_neuron_base + slot);
+                                    temp_best_class = OUTPUT_DATA_WIDTH'(neuron_idx);
                                 end
                             end
                         end
@@ -458,39 +587,53 @@ module bnn_fcc #(
                         best_score <= temp_best_score;
                         best_class <= temp_best_class;
 
-                        if (compute_neuron_base + active_neurons >= layer_neurons) begin
-                            state <= STATE_OUTPUT;
-                            out_data_reg <= OUTPUT_BUS_WIDTH'(temp_best_class);
+                        if (compute_group_idx + 1 >= total_groups) begin
+                            out_data_reg        <= OUTPUT_BUS_WIDTH'(temp_best_class);
                             image_pixels_loaded <= '0;
-                            image_complete <= 1'b0;
+                            image_complete      <= 1'b0;
+                            state               <= STATE_OUTPUT;
                         end else begin
-                            compute_neuron_base <= compute_neuron_base + active_neurons;
+                            compute_group_idx   <= compute_group_idx + 1'b1;
                             compute_word_idx    <= '0;
-                            state               <= STATE_COMPUTE_ACCUM;
+                            state               <= STATE_COMPUTE_READ;
                         end
                     end else begin
-                        for (int slot = 0; slot < PARALLEL_INPUTS; slot++) begin
-                            if ((slot < active_neurons) && ((compute_neuron_base + slot) < layer_neurons)) begin
-                                activation_word[slot] = (accum[slot] >= threshold_mem[compute_layer][compute_neuron_base + slot]);
+                        if (compute_layer == 2'd0) begin
+                            for (int slot = 0; slot < PN0; slot++) begin
+                                int neuron_idx;
+
+                                neuron_idx = compute_group_idx * PN0 + slot;
+                                if ((slot < active_neurons) && (neuron_idx < layer_neurons)) begin
+                                    activation_word[slot] = (accum[slot] >= threshold_mem_l0[slot][compute_group_idx]);
+                                end
                             end
+                            input_buf_l1[compute_group_idx] <= activation_word;
+                        end else begin
+                            for (int slot = 0; slot < PN1; slot++) begin
+                                int neuron_idx;
+
+                                neuron_idx = compute_group_idx * PN1 + slot;
+                                if ((slot < active_neurons) && (neuron_idx < layer_neurons)) begin
+                                    activation_word[slot] = (accum[slot] >= threshold_mem_l1[slot][compute_group_idx]);
+                                end
+                            end
+                            input_buf_l2[compute_group_idx] <= activation_word;
                         end
 
-                        layer_input_mem[compute_layer+1][compute_neuron_base / PARALLEL_INPUTS] <= activation_word;
-
-                        if (compute_neuron_base + active_neurons >= layer_neurons) begin
-                            compute_layer       <= compute_layer + 1'b1;
-                            compute_neuron_base <= '0;
-                            compute_word_idx    <= '0;
-                            state               <= STATE_COMPUTE_ACCUM;
+                        if (compute_group_idx + 1 >= total_groups) begin
+                            compute_layer     <= compute_layer + 1'b1;
+                            compute_group_idx <= '0;
+                            compute_word_idx  <= '0;
+                            state             <= STATE_COMPUTE_READ;
                         end else begin
-                            compute_neuron_base <= compute_neuron_base + active_neurons;
-                            compute_word_idx    <= '0;
-                            state               <= STATE_COMPUTE_ACCUM;
+                            compute_group_idx <= compute_group_idx + 1'b1;
+                            compute_word_idx  <= '0;
+                            state             <= STATE_COMPUTE_READ;
                         end
                     end
 
-                    for (int slot = 0; slot < MAX_PARALLEL_NEURONS; slot++) begin
-                        accum[slot] <= '0;
+                    for (int i = 0; i < MAX_PN; i++) begin
+                        accum[i] <= '0;
                     end
                 end
 
