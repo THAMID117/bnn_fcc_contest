@@ -534,7 +534,6 @@ module bnn_fcc_coverage_tb #(
             @(posedge clk);
             if (rst) begin
                 prev_output_class = -1;
-                outputs_seen = 0;
             end else if (data_out.tvalid && data_out.tready) begin
                 int actual_class;
                 logic [OUTPUT_DATA_WIDTH-1:0] expected_class;
