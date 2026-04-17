@@ -184,16 +184,7 @@ pdflatex report.tex
 
 This produces `report.pdf`, which is the file intended for submission.
 
-## Submission Checklist
 
-Before submitting the repository:
-
-1. Rerun the required functional testbench and confirm the success banner.
-2. Rerun the coverage-oriented testbench and confirm the printed coverage summary.
-3. Rerun `openflex bnn_fcc_verify.yml` and confirm a clean pass.
-4. Rerun `openflex bnn_fcc_timing.yml -c bnn_fcc.csv` and confirm the reported timing and area figures.
-5. Build `report.pdf` from [report.tex](report.tex).
-6. Verify that the repository root contains the final report and that the commands in the report still match the repo contents.
 
 ## Upstream Syncing
 
