@@ -47,7 +47,7 @@ If you get errors when running openflex here, make sure that Vivado is in your P
 
 ## Verification
 
-For verifying your final design, update the [bnn_fcc_verification.yml](bnn_fcc_verification.yml) file with your design sources like before. You do not need bnn_fcc_timing.sv here.
+For verifying your final design, update the [bnn_fcc_verify.yml](bnn_fcc_verify.yml) file with your design sources like before. You do not need `bnn_fcc_timing.sv` here.
 
 You could potentially verify your design like this:
 
@@ -80,6 +80,16 @@ Verification FAILED (see run.log)
 ```
 
 where run.log contains the output from the simulation.
+
+## Optional Coverage-Oriented Run
+
+If you want to run the additional coverage-focused testbench, use:
+
+```bash
+openflex bnn_fcc_coverage.yml
+```
+
+This runs [`verification/bnn_fcc_coverage_tb.sv`](../verification/bnn_fcc_coverage_tb.sv), which is intended for reportable verification depth rather than the required contest pass/fail flow.
 
 
 

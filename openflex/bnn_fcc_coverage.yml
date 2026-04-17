@@ -1,0 +1,17 @@
+mode: sim
+tool: questa
+top: bnn_fcc_coverage_tb
+clock: clk
+
+files:
+  - ../rtl/bnn_fcc.sv
+  - ../verification/axi4_stream_if.sv
+  - ../verification/bnn_fcc_tb_pkg.sv
+  - ../verification/bnn_fcc_coverage_tb.sv
+
+parameters:
+  INPUT_DATA_WIDTH: [8]
+  INPUT_BUS_WIDTH: [64]
+  CONFIG_BUS_WIDTH: [64]
+  OUTPUT_DATA_WIDTH: [4]
+  OUTPUT_BUS_WIDTH: [8]

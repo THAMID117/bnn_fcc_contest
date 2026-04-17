@@ -47,6 +47,21 @@ run -all
 -->
 ---
 
+## Additional Coverage Testbench
+
+This repository also includes [`bnn_fcc_coverage_tb.sv`](bnn_fcc_coverage_tb.sv), a separate coverage-oriented testbench intended to complement the provided top-level verification flow.
+
+It uses a custom topology chosen to stress:
+* Message reordering for configuration traffic
+* Intermittent and bursty `TVALID` patterns
+* Intermittent and bursty `TREADY` backpressure
+* Partial `TKEEP` cases on both configuration and image streams
+* Reset during configuration and reset during image traffic
+* Repeated outputs versus varying outputs
+* All 10 output classes within a single randomized-yet-self-checking scenario
+
+Use `bnn_fcc_tb.sv` for the required correctness/performance flow and use `bnn_fcc_coverage_tb.sv` to demonstrate stronger verification quality in your report.
+
 ## Testbench Parameters
 
 The testbench is highly configurable via SystemVerilog parameters. They are grouped into the following categories:

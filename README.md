@@ -61,6 +61,7 @@ Submissions will be judged based on:
 |   └── your own files
 ├── verification/        # Testbench files
 |   ├── bnn_fcc_tb.sv
+|   ├── bnn_fcc_coverage_tb.sv
 |   ├── bnn_fcc_tb_pkg.sv
 |   └── your own files
 ├── slides/              # Slides explaning the project
