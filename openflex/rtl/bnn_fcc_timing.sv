@@ -9,6 +9,11 @@
 //
 // INSTRUCTIONS: Update the application-specific parameters as required by your implementation.
 // This should only be PARALLEL_INPUTS and PARALLEL_NEURONS, unless you added more parameters.
+//
+// CONTEST SUBMISSION OWNER:
+// Khan Thamid Hasan
+// UFID: 17308681
+// Email: khanthamidhasan@ufl.edu
 
 module bnn_fcc_timing #(
     parameter int INPUT_DATA_WIDTH  = 8,

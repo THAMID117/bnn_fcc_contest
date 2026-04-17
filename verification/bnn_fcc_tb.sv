@@ -39,6 +39,11 @@
 // the defaults will make initial testing easier. Similarly, when measuring performance, 
 // leave these at their defaults to avoid artificially hurting performance.
 //
+// CONTEST SUBMISSION OWNER:
+// Khan Thamid Hasan
+// UFID: 17308681
+// Email: khanthamidhasan@ufl.edu
+//
 // PARAMETERS:
 // [Testbench Configuration]
 // USE_CUSTOM_TOPOLOGY       - Enable user-defined NN topology specified by CUSTOM_TOPOLOGY

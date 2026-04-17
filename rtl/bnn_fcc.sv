@@ -1,3 +1,8 @@
+// Contest submission owner:
+// Khan Thamid Hasan
+// UFID: 17308681
+// Email: khanthamidhasan@ufl.edu
+
 module bnn_fcc #(
     parameter int INPUT_DATA_WIDTH  = 8,
     parameter int INPUT_BUS_WIDTH   = 64,

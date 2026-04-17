@@ -4,6 +4,12 @@ This repository contains a submission-ready implementation of the `bnn_fcc` bina
 
 The top-level DUT is [rtl/bnn_fcc.sv](rtl/bnn_fcc.sv). Interface details are documented in [rtl/README.md](rtl/README.md). Testbench details are documented in [verification/README.md](verification/README.md). Openflex timing and verification flows are documented in [openflex/README.md](openflex/README.md).
 
+## Submission Owner
+
+- Name: Khan Thamid Hasan
+- UFID: 17308681
+- Email: `khanthamidhasan@ufl.edu`
+
 ## Submission Candidate
 
 The canonical submission configuration used across the DUT, required verification testbench, coverage testbench, and timing wrapper is:

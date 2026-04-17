@@ -1,5 +1,10 @@
 `timescale 1ns / 100ps
 
+// Contest submission owner:
+// Khan Thamid Hasan
+// UFID: 17308681
+// Email: khanthamidhasan@ufl.edu
+
 module bnn_fcc_coverage_tb #(
     parameter realtime CLK_PERIOD = 10ns,
     parameter realtime TIMEOUT    = 10ms,
